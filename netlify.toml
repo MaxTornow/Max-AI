@@ -1,0 +1,25 @@
+[build]
+  command = "chmod +x build.sh && ./build.sh"
+  publish = "dist"
+
+# Proxy for FastSaver API
+[[redirects]]
+  from = "/api/fastsaver/*"
+  to = "https://fastsaverapi.com/:splat"
+  status = 200
+  force = true
+  headers = {Accept = "application/json"}
+
+# Proxy for Claude API with the required header
+[[redirects]]
+  from = "/api/claude/*"
+  to = "https://api.anthropic.com/:splat"
+  status = 200
+  force = true
+  headers = {X-From-Netlify = "true", anthropic-dangerous-direct-browser-access = "true"}
+
+# SPA fallback
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
