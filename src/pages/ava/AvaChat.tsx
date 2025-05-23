@@ -249,10 +249,18 @@ const AvaChat: React.FC = () => {
    * Handle the "Make me 10 Viral Scripts" button click
    */
   const handleMakeViralScripts = () => {
+    // Set the input text
     setInput('Create 10 viral scripts for my business');
-    // Trigger form submission
-    const form = document.querySelector('form');
-    form?.dispatchEvent(new Event('submit', { cancelable: true }));
+    
+    // Use setTimeout to ensure the input state is updated before submitting
+    setTimeout(() => {
+      // Create and dispatch a submit event on the form
+      const form = document.querySelector('form');
+      if (form) {
+        const submitEvent = new Event('submit', { bubbles: true, cancelable: true });
+        form.dispatchEvent(submitEvent);
+      }
+    }, 0);
   };
   
   /**
