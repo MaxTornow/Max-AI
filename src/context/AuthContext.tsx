@@ -15,6 +15,7 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   updatePassword: (password: string) => Promise<void>;
+  updateProfile: (fullName: string) => Promise<{success: boolean, message: string}>;
 }
 
 /**
@@ -35,6 +36,7 @@ const AuthContext = createContext<AuthContextType>({
   signOut: async () => {},
   resetPassword: async () => {},
   updatePassword: async () => {},
+  updateProfile: async () => ({ success: false, message: 'Not implemented' }),
 });
 
 /**
@@ -359,6 +361,46 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  /**
+   * Update the user's profile
+   * @param {string} fullName - User's new full name
+   * @returns {Promise<{success: boolean, message: string}>} Result of the profile update operation
+   */
+  const updateProfile = async (fullName: string): Promise<{success: boolean, message: string}> => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      // Update user metadata
+      const { data, error } = await supabase.auth.updateUser({
+        data: { full_name: fullName.trim() }
+      });
+      
+      if (error) {
+        throw error;
+      }
+      
+      // Update the local user state
+      setUser(data.user);
+      
+      return {
+        success: true,
+        message: 'Profile updated successfully!'
+      };
+      
+    } catch (error: any) {
+      console.error('Error updating profile:', error);
+      setError(error.message || 'Failed to update profile. Please try again.');
+      
+      return {
+        success: false,
+        message: error.message || 'Failed to update profile. Please try again.'
+      };
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const value = {
     session,
     user,
@@ -369,6 +411,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     signOut,
     resetPassword,
     updatePassword,
+    updateProfile,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

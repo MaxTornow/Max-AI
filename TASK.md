@@ -1,6 +1,6 @@
 # TASK.md
 
-## Last Updated: 2025-05-21 (Updated by Cascade for git repository maintenance)
+## Last Updated: 2025-05-28 (Updated for Supabase invitation flow)
 
 ## Active Tasks
 
@@ -19,6 +19,20 @@
 - [x] Implement responsive design for mobile/desktop
 - [x] Create common UI components (Button, Input, Card, etc.)
 - [x] Set up Context providers (Auth, Theme, App)
+
+### Supabase Invitation Flow
+- [x] Fix token verification in Register component
+  - [x] Update token handling to work with simple token format (not JWT)
+  - [x] Extract email from URL parameters
+  - [x] Pre-fill email field for invited users
+- [x] Update form submission for invited users
+  - [x] Use verifyOtp with type 'invite' to authenticate the invitation token
+  - [x] Use updateUser to set password after verification
+  - [x] Ensure email field is pre-filled and disabled
+  - [x] Handle profile creation for invited users
+- [x] Update email template to include email parameter
+  - [x] Use format: `{{ .SiteURL }}/register?invitation_token={{ .Token }}&email={{ .Email }}`
+- [ ] Test the complete invitation flow
 - [x] Create reusable chat interface component (to be used across all AI agents)
 
 ### Authentication

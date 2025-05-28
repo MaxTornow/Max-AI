@@ -8,7 +8,7 @@ import { FiUser, FiMail, FiLock, FiSave, FiAlertCircle, FiCheckCircle } from 're
  * @returns {JSX.Element} Settings page
  */
 const Settings: React.FC = () => {
-  const { user, loading } = useAuth();
+  const { user, loading, updateProfile, updatePassword } = useAuth();
   const { theme, setTheme } = useTheme();
   
   const [fullName, setFullName] = useState(user?.user_metadata?.full_name || '');
@@ -28,14 +28,22 @@ const Settings: React.FC = () => {
     setSuccessMessage('');
     setErrorMessage('');
     
-    // Simulate API call
+    if (!user) {
+      setErrorMessage('You must be logged in to update your profile.');
+      return;
+    }
+    
     try {
-      // In a real implementation, this would update the user's profile
-      setTimeout(() => {
-        setSuccessMessage('Profile updated successfully!');
-      }, 1000);
-    } catch (error) {
-      setErrorMessage('Failed to update profile. Please try again.');
+      // Call the updateProfile function from AuthContext
+      const { success, message } = await updateProfile(fullName);
+      
+      if (success) {
+        setSuccessMessage(message);
+      } else {
+        setErrorMessage(message);
+      }
+    } catch (error: any) {
+      setErrorMessage(error.message || 'Failed to update profile. Please try again.');
     }
   };
   
@@ -48,6 +56,11 @@ const Settings: React.FC = () => {
     setSuccessMessage('');
     setErrorMessage('');
     
+    if (!user) {
+      setErrorMessage('You must be logged in to update your password.');
+      return;
+    }
+    
     // Basic validation
     if (newPassword !== confirmPassword) {
       setErrorMessage('New passwords do not match.');
@@ -59,17 +72,17 @@ const Settings: React.FC = () => {
       return;
     }
     
-    // Simulate API call
     try {
-      // In a real implementation, this would update the user's password
-      setTimeout(() => {
-        setSuccessMessage('Password updated successfully!');
-        setCurrentPassword('');
-        setNewPassword('');
-        setConfirmPassword('');
-      }, 1000);
-    } catch (error) {
-      setErrorMessage('Failed to update password. Please try again.');
+      // Call the updatePassword function from AuthContext
+      await updatePassword(newPassword);
+      
+      // Clear form fields on success
+      setSuccessMessage('Password updated successfully!');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (error: any) {
+      setErrorMessage(error.message || 'Failed to update password. Please try again.');
     }
   };
   
