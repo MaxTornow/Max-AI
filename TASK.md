@@ -1,3 +1,87 @@
+# Current Debugging Plan: AvaChat Frontend Error (2025-06-12)
+
+## 1. Problem Definition
+
+- The application, previously stable for weeks without any code changes, now shows errors in the `AvaChat` component:
+    - "There was an error processing your request. Please try again later."
+    - "Could not connect to the AVA service. Please check your connection and try again."
+- Browser console logs: "Error sending message to webhook or processing response: {}".
+- This occurs despite the n8n webhook reportedly receiving messages and responding successfully.
+
+## 2. Knowns & Unknowns
+
+### Knowns:
+- Application was working correctly for an extended period.
+- No intentional code changes have been made to the application.
+- The n8n webhook successfully receives incoming messages.
+- The n8n webhook's response indicates success.
+- Specific error messages are visible in the frontend UI (`AvaChat` component).
+- A generic error "Error sending message to webhook or processing response: {}" is logged in the browser console.
+
+### Unknowns:
+- The precise root cause of the discrepancy between the successful backend (n8n) response and the frontend error.
+- The nature of the "AVA service" mentioned in the error message and why the frontend believes it cannot connect to it.
+- The exact point of failure in the frontend data flow:
+    - Is it during the sending of the request to the webhook?
+    - Is it during the receiving of the response from the webhook?
+    - Is it during the processing of the received data?
+- Whether any external dependencies (other APIs, services, environment configurations, browser updates) might have changed or are experiencing issues.
+- The detailed structure of the data being sent from the frontend to the webhook.
+- The exact structure of the "successful" response from the webhook that the frontend is attempting to process.
+- What the empty object `{}` in the console error `Error sending message to webhook or processing response: {}` signifies. Is it a caught error object that's not being logged with sufficient detail?
+
+## 3. Investigation Tasks
+
+### Phase 1: Frontend Data Flow & Error Analysis
+
+-   **Task 1.1: Inspect Frontend Webhook Call and Response Handling**
+    -   [x] **Subtask 1.1.1:** Locate the code segment responsible for sending the message to the n8n webhook (likely within or related to the `AvaChat` component or a service it uses). - *Completed: Found in `/Users/dan/Documents/Max Tornow  2/AI INTERFACE/src/services/ava/index.ts` (`sendMessage` function).*
+    -   [x] **Subtask 1.1.2:** Add detailed logging to capture the exact request payload being sent to the webhook. - *Completed: Added `console.log` for the full payload.*
+    -   [x] **Subtask 1.1.3:** Add detailed logging to capture the full, raw response (headers and body) received from the webhook *before* any frontend processing occurs. - *Completed: Added logging for response headers; raw body was already logged.*
+    -   [x] **Subtask 1.1.4:** Enhance error logging for the webhook call. Modify the existing `console.error("Error sending message to webhook or processing response: {}", errorObject);` to print the `errorObject` with more detail (e.g., `console.error("Detailed error during webhook communication:", errorObject, errorObject?.stack, JSON.stringify(errorObject));`). This will help understand what the empty `{}` actually represents. - *Completed: Replaced generic error log with detailed error object logging.*
+-   **Task 1.2: Analyze Webhook Response Processing Logic**
+    -   [ ] **Subtask 1.2.1:** Identify the code that processes the response from the webhook.
+    -   [ ] **Subtask 1.2.2:** Add logging to trace the data at each significant step of this processing logic.
+    -   [ ] **Subtask 1.2.3:** Determine if the structure of the received response matches what the frontend code expects.
+-   **Task 1.3: Understand "AVA Service" Context**
+    -   [ ] **Subtask 1.3.1:** Search the entire codebase for references to "AVA service" to understand its role, how the connection is typically established or checked, and its relationship (if any) to the n8n webhook.
+    -   [ ] **Subtask 1.3.2:** Determine if this "AVA service" is an internal part of the frontend logic, related to the n8n webhook, or a separate external service.
+
+### Phase 2: Network & Environment Investigation (If Phase 1 is inconclusive)
+
+-   **Task 2.1: Examine Network Requests in Browser Developer Tools**
+    -   [ ] **Subtask 2.1.1:** Use the browser's developer tools (Network tab) to meticulously inspect the actual HTTP request made to the n8n webhook and the response received.
+    -   [ ] **Subtask 2.1.2:** Check HTTP status codes, request/response headers, and request/response payloads.
+    -   [ ] **Subtask 2.1.3:** Look for any CORS (Cross-Origin Resource Sharing) issues, timeouts, or other network-level errors that might not be fully captured by the application's error handling.
+-   **Task 2.2: Verify Webhook Configuration in Frontend**
+    -   [ ] **Subtask 2.2.1:** Double-check the webhook URL being used by the frontend. Verify it hasn't been inadvertently changed or become outdated (e.g., due to environment variable issues).
+    -   [ ] **Subtask 2.2.2:** Ensure any necessary API keys or authentication tokens used in the request are correctly configured, still valid, and haven't expired or been revoked.
+
+### Phase 3: n8n Workflow Deep Dive (If frontend seems to receive expected data but still fails, or if response structure is suspect)
+
+-   **Task 3.1: Review n8n Workflow Execution Logs**
+    -   [ ] **Subtask 3.1.1:** Access and examine the detailed execution logs in n8n for the specific interactions that correspond to the failing frontend requests.
+    -   [ ] **Subtask 3.1.2:** Confirm the exact data structure and content that n8n is sending back as a response.
+-   **Task 3.2: Test n8n Workflow Independently**
+    -   [ ] **Subtask 3.2.1:** If feasible, construct and send a test request to the n8n webhook using a tool like Postman, Insomnia, or cURL, mimicking the frontend's request as closely as possible (headers, body).
+    -   [ ] **Subtask 3.2.2:** Analyze the response received directly from n8n to compare it with what the frontend receives.
+
+## 4. Code Edits & Findings Log
+
+*(This section will be updated progressively as tasks are performed and findings are made)*
+
+#### 2025-06-12: Enhanced Logging in `src/services/ava/index.ts`
+- **File Modified:** `/Users/dan/Documents/Max Tornow  2/AI INTERFACE/src/services/ava/index.ts`
+- **Function:** `sendMessage`
+- **Changes:**
+    - Added `console.log` to display the full JSON request payload sent to the webhook.
+    - Added `console.log` to display all HTTP response headers received from the webhook.
+    - Significantly enhanced the `catch` block to log detailed properties of the error object (name, message, stack, cause, and a comprehensive stringified version) when webhook communication fails.
+- **Reason:** To gather more detailed information about the request, response, and any errors occurring during the interaction with the n8n webhook, as part of investigating the frontend error in `AvaChat`.
+- **Completed Subtasks:** 1.1.1, 1.1.2, 1.1.3, 1.1.4.
+
+---
+
 # TASK.md
 
 ## Last Updated: 2025-05-28 (Updated for Supabase invitation flow)
@@ -52,230 +136,9 @@
 - [x] Create message rendering components
 - [x] Implement chat input with attachments
 - [x] Set up message history persistence in Supabase
-- [x] Create frontend-to-AVA-agent connection
-- [x] Implement prompt templates
-- [x] Add conversation management (save, list, delete)
-- [x] Add "Make me 10 Viral Scripts" quick action button
-  - [x] Create centered button in AvaChat component
-  - [x] Implement click handler to add text to chat input
-  - [x] Auto-submit message when button is clicked
-  - [x] Style button to match application design
-
-### AVA n8n to Pydantic Agent Conversion
-- [x] Analyze n8n workflow structure and components
-- [x] Set up Python project structure for the agent
-  - [x] Create agent.py for main agent logic
-  - [x] Create tools.py for agent tools (Brave search)
-  - [x] Create prompts.py for system prompts
-  - [x] Create models.py for Pydantic models
-- [x] Implement Brave search tool
-- [x] Implement memory system for conversation history
-- [x] Create FastAPI endpoint for agent interaction
-- [x] Implement authentication with Supabase
-- [x] Set up CORS configuration for frontend access
-- [x] Create Docker configuration for deployment
-- [x] Add environment variable configuration
-
-### AVA Agent Development Testing
-- [x] Set up environment variables for local development
-  - [x] Configure Anthropic API key
-  - [x] Configure Brave Search API key
-  - [x] Configure Supabase URL and service key
-  - [x] Set up CORS origins for local development
-- [x] Create development testing documentation
-- [x] Resolve package import issues in the agent
-- [x] Create run script for local development
-- [x] Test agent health endpoint
-- [x] Update frontend .env.development to use correct port
-- [x] Create standalone test client for API testing
-- [x] Test agent API with the test client
-- [x] Test integration with the frontend
-- [x] Fix authentication issues in the test client
-  - [x] Fix 403 Forbidden error in test client
-  - [x] Implement development mode authentication bypass
-  - [x] Update authentication logic in agent.py
-- [x] Fix data model issues
-  - [x] Update StyleModel to accept pain_points as a list of strings
-  - [x] Modify agent.py to join pain_points list into a string for the prompt template
-- [x] Fix Claude model configuration
-  - [x] Update model name from "claude-3.7-sonnet" to "claude-3-7-sonnet-20250219"
-  - [x] Fix 500 Internal Server Error related to model not found
-- [x] Fix Anthropic API integration
-  - [x] Remove await from client.messages.create() call
-  - [x] Fix "object Message can't be used in 'await' expression" error
-- [x] Document testing results and next steps
-
-### AVA Agent Integration with Frontend
-- [x] Verify AVA agent server is running correctly
-  - [x] Check if the agent server starts without errors
-  - [x] Verify the agent server is listening on port 8002
-  - [x] Confirm the health endpoint is accessible from the frontend
-
-### Modify AVA Chat Initialization Behavior
-- [x] Prevent automatic agent initialization when page loads
-  - [x] Modify the `initializeChat` function to only check agent health on page load
-  - [x] Create a new function to get the initial greeting when explicitly triggered
-  - [x] Update the UI to show only a welcome message and button initially
-- [x] Ensure AVA agent only triggers on explicit user actions
-  - [x] Trigger agent on "Make me 10 Viral templates" button click
-  - [x] Trigger agent on first user message
-  - [x] Maintain existing functionality after initial interaction
-
-### Fix Git Repository Issues
-- [x] Commit TASK.md updates with git repository maintenance tasks
-  - [x] Document the issue with node_modules being tracked in git
-  - [x] Create a detailed plan for fixing the issue safely
-  - [x] Commit the updated TASK.md file
-- [ ] Create a backup of the entire project to prevent any code loss
-  - [ ] Create a zip archive of the current project state
-  - [ ] Store the backup in a safe location
-- [ ] Fix node_modules tracking issues in git
-  - [ ] Create a new branch for the fixed repository
-  - [ ] Copy all project files except node_modules and .git to the new branch
-  - [ ] Reinitialize the git repository with proper .gitignore
-  - [ ] Commit all files to the new clean repository
-- [ ] Merge changes back to the main development branch
-  - [ ] Ensure all code changes are preserved
-  - [ ] Verify that node_modules is properly ignored
-
-### Fix AVA Agent String Indices Error
-- [x] Fix "string indices must be integers, not 'str'" error
-  - [x] Identify the exact location of the error in agent.py
-  - [x] Fix data type handling in the agent code
-  - [x] Ensure proper validation of incoming data
-  - [x] Add better error handling for data type mismatches
-  - [x] Test the fix with the frontend integration
-
-### Implement Automatic Initial Greeting in AVA Agent
-- [x] Implement automatic initial greeting when chat interface is opened
-  - [x] Examine current initialization flow in frontend and backend
-  - [x] Create a dedicated endpoint for initial greeting in the backend
-  - [x] Modify frontend to request initial greeting on chat initialization
-  - [x] Ensure proper error handling for the initial greeting request
-  - [x] Test the implementation with the frontend interface
-
-### Fix AvaChat Opening Message and Prompt Implementation
-- [x] Remove hardcoded opening message in AvaChat component
-  - [x] Modify AvaChat.tsx to not include a default message
-  - [x] Update the component to wait for the first message from the agent
-- [x] Simplify prompt implementation to use only system prompt
-  - [x] Update prompts.py to use only the system prompt from n8n
-  - [x] Remove unnecessary template variables if not needed
-  - [x] Update agent.py to use the simplified prompt structure
-- [x] Implement cognitive bias checking
-  - [x] Update the system prompt to include instructions for checking cognitive biases
-  - [x] Ensure the agent responds with bias analysis when requested
-- [x] Test the updated implementation
-  - [x] Verify the opening message comes from the agent
-  - [x] Test cognitive bias checking functionality
-  - [x] Ensure all existing functionality still works
-
-### Fix AVA Agent Validation Errors
-- [x] Fix hero_story validation error
-  - [x] Update StyleModel in models.py to handle nullable hero_story field
-  - [x] Update frontend formatStyleForApi function to provide default value for hero_story
-  - [x] Add better error handling for style validation
-  - [x] Test the integration with the frontend
-  - [x] Document the solution in FRONTEND_INTEGRATION.md
-- [x] Fix Template usage error
-  - [x] Replace Template.format() with Template.safe_substitute() in agent.py
-  - [x] Fix all template usages for system prompt, search context, memory context
-  - [x] Fix template usages for viral scripts, hooks, and content ideas
-  - [x] Document the solution in FRONTEND_INTEGRATION.md
-
-### Update AVA Agent System Prompt
-- [x] Update system prompt to match n8n version
-  - [x] Update SYSTEM_PROMPT_TEMPLATE in prompts.py with detailed n8n prompt
-  - [x] Update viral scripts, hooks, and content ideas templates
-  - [x] Add Max Tornow's personal style and tone
-  - [x] Implement viral video checklist integration
-  - [x] Update templates to use search_context and memory_context variables
-- [x] Debug frontend-to-agent communication
-  - [x] Add detailed logging in the frontend AVA service
-  - [x] Add detailed logging in the agent's process_message function
-  - [x] Check for CORS issues in browser developer console
-  - [ ] Fix CORS configuration to allow requests from http://127.0.0.1:49985
-  - [ ] Update CORS_ORIGINS environment variable in .env file
-  - [ ] Verify CORS headers are being properly set in responses
-  - [ ] Verify authentication token is being sent correctly
-- [ ] Fix any identified issues
-  - [ ] Update environment variables if needed
-  - [ ] Fix any data format mismatches
-  - [ ] Resolve authentication issues
-  - [ ] Address CORS configuration problems
-- [ ] Test the integration
-  - [ ] Test sending a simple message from the frontend
-  - [ ] Verify conversation history is maintained
-  - [ ] Test style selection functionality
-  - [ ] Ensure error handling works properly
-- [x] Enhance the integration
-  - [x] Improve error messages for better debugging
-  - [x] Add retry logic for failed requests
-  - [x] Optimize performance if needed
-- [x] Fix remaining integration issues
-  - [x] Resolve the string indices error in the backend
-  - [x] Ensure consistent data type handling between frontend and backend
-  - [x] Add more robust validation for API requests
-
-### VERA Implementation
-- [x] Design video creation interface
-- [x] Implement video script generation with Claude
-- [x] Create script editing interface
-- [x] Implement video rendering with FastSaver API
-- [x] Add video preview component
-- [x] Create video download functionality
-- [x] Implement video sharing options
-- [x] Add video history and management
-
-### LARA Implementation
-- [ ] Design launch strategy interface
-- [ ] Implement strategy generation with Claude
-- [ ] Create strategy editing interface
-- [ ] Add strategy export functionality
-- [ ] Implement strategy history and management
-
-### LACY Implementation
-- [ ] Design copywriting interface
-- [ ] Implement copy generation with Claude
-- [ ] Create copy editing interface
-- [ ] Add copy export functionality
-- [ ] Implement copy history and management
-
-### FRANCK Implementation
-- [ ] Design funnel creation interface
-- [ ] Implement funnel generation with Claude
-- [ ] Create funnel editing interface
-- [ ] Add funnel export functionality
-- [ ] Implement funnel history and management
-
-### FARIS Implementation
-- [ ] Design Facebook ads interface
-- [ ] Implement ad generation with Claude
-- [ ] Create ad editing interface
-- [ ] Add ad export functionality
-- [ ] Implement ad history and management
-
-### Styles Management
-- [x] Create styles database schema
-- [x] Implement styles CRUD operations
-- [x] Design styles management interface
-- [x] Create styles form component
-- [x] Add styles list component
-- [x] Implement styles selection in AI agents
-- [x] Add styles sharing functionality
-- [x] Create default styles for new users
-
-## Notes
-- ✅ Successfully implemented the authentication flow with Supabase
-- ✅ Added proper error handling for authentication failures
-- ✅ Created a responsive sidebar that collapses on mobile
-- ✅ Implemented dark/light mode toggle with system preference detection
-- ✅ Created a reusable chat interface component that can be used across all AI agents
-- ✅ Added style selection and creation functionality in the VERA rewrite creation process
-- ✅ Reused the existing StyleForm component for creating new styles in VERA
-- ✅ Created a StylesContext to share style data across components
-- ✅ Ensured that when a new style is created in VERA, it's also reflected in the My Styles page
-- For the AVA agent conversion, need to ensure the Python implementation maintains the same functionality as the n8n workflow
+- [x] Cre
+<truncated 10696 bytes>
+nt conversion, need to ensure the Python implementation maintains the same functionality as the n8n workflow
 - Consider implementing a more robust memory system in the Python agent compared to the n8n workflow
 - The Brave search tool implementation will need proper error handling and rate limiting
 - Need to ensure the Python agent can handle the same style guidelines format as the n8n workflow

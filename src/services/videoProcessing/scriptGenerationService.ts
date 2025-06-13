@@ -94,140 +94,197 @@ Adapt original's tone to be:
 (Match the original's approach)
 
 ### Ending Requirements:
-- Follow original transcript's ending style exactly
-- Match abruptness level of original
-- If original has CTA, adapt it (don't add if absent)
-- Stick to ONE CTA maximum if present in original
+- Keep original ending style (abrupt vs. gradual)
+- Only include CTAs if original has them
+- Maintain same closing tone and energy
 
-## Examples:
-
-### Proper JSON Response Format:
-
+## Output Format:
+Provide the scripts in the following JSON format:
+\`\`\`json
 {
-  "original_transcription": {
-    "text": "Sample text 1"
-  },
   "script_1": {
-    "text": "Sample text 2"
+    "title": "Title for Script 1",
+    "text": "Full script text here..."
   },
   "script_2": {
-    "text": "Sample text 3"
+    "title": "Title for Script 2",
+    "text": "Full script text here..."
   },
   "script_3": {
-    "text": "Sample text 4"
+    "title": "Title for Script 3",
+    "text": "Full script text here..."
   }
 }
-## Notes:
+\`\`\``;
 
-### What to Avoid:
-- Starting with "hello everyone" or similar greetings unless present in original
-- Adding elements absent from original transcript
-- Changing the structural flow of the original
-- Including multiple CTAs when original has one or none
-
-### What TO do:
-- Stay true to original's authentic voice and structure
-- Adapt only language and examples for target audience
-- Preserve original's natural progression and pacing
-- Mirror original's level of directness and engagement
-
-### Output Requirements:
-**CRITICAL:** Return ONLY the raw JSON object without any markdown formatting, code blocks, or explanations. Do not wrap the JSON in tags. Do not include any text before or after the JSON. The response should start with { and end with } and be valid JSON that can be directly parsed.`;
-
-    // Using proxy to avoid CORS issues
-    // Instead of direct API call, we route through our local proxy
-    console.log('[DEBUG] Making request to Claude API via proxy');
-    
-    const response = await fetch('/api/claude/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': claudeApiKey,
-        'anthropic-version': '2023-06-01'
-      }, // Consider updating to '2024-06-01' if needed for Claude 3.7
-      // Note: If this API version doesn't work with Claude 3.7, you may need to update to a newer version
-      // Using Claude 3.7 Sonnet with appropriate token limits (4000 max)
-      body: JSON.stringify({
-        model: 'claude-3-7-sonnet-20250219',
-        max_tokens: 4000,
-        temperature: 0.6,
-        messages: [
-          {
-            role: 'user',
-            content: prompt
-          }
-        ]
-      })
-    });
-
-    console.log('[DEBUG] Claude API response status:', response.status, response.statusText);
-    
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => 'Could not read error response');
-      console.error('[DEBUG] Claude API error response:', errorText);
-      throw new Error(`Failed to generate scripts: ${response.status} ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    
-    // Parse the response content as JSON
-    const contentText = data.content[0].text;
-    
-    // Clean up markdown formatting if present
-    let jsonText = contentText;
-    
-    console.log('[DEBUG] Raw response from Claude:', jsonText.substring(0, 100) + '...');
-    
-    // Check if the response is wrapped in a markdown code block
-    if (jsonText.includes('```json') || jsonText.includes('```')) {
-      console.log('[DEBUG] Detected markdown code block in Claude response');
-      // Extract JSON from markdown code blocks
-      const jsonMatch = jsonText.match(/```(?:json)?\s*\n([\s\S]*?)\n```/);
-      if (jsonMatch && jsonMatch[1]) {
-        jsonText = jsonMatch[1];
-        console.log('[DEBUG] Extracted JSON from markdown code block');
-      } else {
-        console.warn('[DEBUG] Markdown code block detected but couldn\'t extract JSON content');
-      }
-    }
-    
-    // Additional cleanup for any remaining markdown or text
-    // Remove any explanatory text before or after the JSON
-    if (jsonText.includes('{') && jsonText.includes('}')) {
-      const startIndex = jsonText.indexOf('{');
-      const endIndex = jsonText.lastIndexOf('}') + 1;
-      if (startIndex >= 0 && endIndex > startIndex) {
-        const potentialJson = jsonText.substring(startIndex, endIndex);
-        try {
-          // Verify this is valid JSON
-          JSON.parse(potentialJson);
-          jsonText = potentialJson;
-          console.log('[DEBUG] Extracted JSON object from mixed content');
-        } catch (e) {
-          // If parsing fails, we'll continue with the previous jsonText
-          console.warn('[DEBUG] Failed to extract clean JSON object, continuing with previous cleaning');
-        }
-      }
-    }
-    
-    console.log('[DEBUG] Cleaned JSON text (first 100 chars):', jsonText.substring(0, 100) + '...');
+    // Create controller for timeout handling
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minute timeout for Claude API
     
     try {
-      return JSON.parse(jsonText) as ScriptGenerationResponse;
-    } catch (jsonError) {
-      console.error('[DEBUG] Error parsing cleaned JSON:', jsonError);
-      console.error('[DEBUG] Attempted to parse text:', jsonText.substring(0, 200) + '...');
-      throw new Error('Failed to parse Claude response as JSON. The response may not be in the expected format.');
+      console.log('[DEBUG] Making request to Claude API via proxy');
+      
+      // Using proxy to avoid CORS issues
+      const response = await fetch('/api/claude/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': claudeApiKey,
+          'anthropic-version': '2023-06-01'
+        },
+        body: JSON.stringify({
+          model: 'claude-3-7-sonnet-20250219',
+          max_tokens: 4000,
+          temperature: 0.6,
+          messages: [
+            {
+              role: 'user',
+              content: prompt
+            }
+          ]
+        }),
+        signal: controller.signal
+      });
+      
+      // Clear the timeout since the request completed
+      clearTimeout(timeoutId);
+
+      console.log('[DEBUG] Claude API response status:', response.status, response.statusText);
+      
+      // Capture response headers for diagnostics
+      const responseHeaders: Record<string, string> = {};
+      response.headers.forEach((value, key) => {
+        responseHeaders[key] = value;
+      });
+      console.log('[DEBUG] Claude API response headers:', responseHeaders);
+      
+      // Check for specific HTTP status codes that indicate rate limiting or other issues
+      if (response.status === 429) {
+        console.error('[DEBUG] API RATE LIMIT EXCEEDED - Claude API is rate limiting requests');
+        
+        // Try to get retry-after header
+        const retryAfter = response.headers.get('retry-after');
+        if (retryAfter) {
+          console.log(`[DEBUG] Retry-After header suggests waiting ${retryAfter} seconds`);
+        }
+        
+        const errorText = await response.text().catch(() => 'Could not read error response');
+        console.error('[DEBUG] Rate limit error details:', errorText);
+        throw new Error(`RATE_LIMIT: Claude API rate limit exceeded. ${errorText}`);
+      } else if (response.status === 401 || response.status === 403) {
+        console.error('[DEBUG] AUTHENTICATION ERROR - Claude API rejected the API key');
+        const errorText = await response.text().catch(() => 'Could not read error response');
+        console.error('[DEBUG] Authentication error details:', errorText);
+        throw new Error(`AUTH_ERROR: Invalid Claude API key. ${errorText}`);
+      } else if (response.status >= 500) {
+        console.error(`[DEBUG] SERVER ERROR - Claude API returned a ${response.status} error`);
+        const errorText = await response.text().catch(() => 'Could not read error response');
+        console.error('[DEBUG] Server error details:', errorText);
+        throw new Error(`SERVER_ERROR: Claude API server error (${response.status}). ${errorText}`);
+      } else if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Could not read error response');
+        console.error(`[DEBUG] HTTP ERROR - Claude API returned a ${response.status} error: ${errorText}`);
+        throw new Error(`HTTP_ERROR: Failed to generate scripts (${response.status}). ${errorText}`);
+      }
+
+      const data = await response.json();
+      
+      // Parse the response content as JSON
+      const contentText = data.content[0].text;
+      
+      // Clean up markdown formatting if present
+      let jsonText = contentText;
+      
+      console.log('[DEBUG] Raw response from Claude:', jsonText.substring(0, 100) + '...');
+      
+      // Check if the response is wrapped in a markdown code block
+      if (jsonText.includes('```json') || jsonText.includes('```')) {
+        console.log('[DEBUG] Detected markdown code block in Claude response');
+        // Extract JSON from markdown code blocks
+        const jsonMatch = jsonText.match(/```(?:json)?\s*\n([\s\S]*?)\n```/);
+        if (jsonMatch && jsonMatch[1]) {
+          jsonText = jsonMatch[1];
+          console.log('[DEBUG] Extracted JSON from markdown code block');
+        } else {
+          console.warn('[DEBUG] Markdown code block detected but couldn\'t extract JSON content');
+        }
+      }
+      
+      // Additional cleanup for any remaining markdown or text
+      // Remove any explanatory text before or after the JSON
+      if (jsonText.includes('{') && jsonText.includes('}')) {
+        const startIndex = jsonText.indexOf('{');
+        const endIndex = jsonText.lastIndexOf('}') + 1;
+        if (startIndex >= 0 && endIndex > startIndex) {
+          const potentialJson = jsonText.substring(startIndex, endIndex);
+          try {
+            // Verify this is valid JSON
+            JSON.parse(potentialJson);
+            jsonText = potentialJson;
+            console.log('[DEBUG] Extracted JSON object from mixed content');
+          } catch (e) {
+            // If parsing fails, we'll continue with the previous jsonText
+            console.warn('[DEBUG] Failed to extract clean JSON object, continuing with previous cleaning');
+          }
+        }
+      }
+      
+      console.log('[DEBUG] Cleaned JSON text (first 100 chars):', jsonText.substring(0, 100) + '...');
+      
+      try {
+        return JSON.parse(jsonText) as ScriptGenerationResponse;
+      } catch (jsonError) {
+        console.error('[DEBUG] Error parsing cleaned JSON:', jsonError);
+        console.error('[DEBUG] Attempted to parse text:', jsonText.substring(0, 200) + '...');
+        throw new Error('PARSE_ERROR: Failed to parse Claude response as JSON. The response may not be in the expected format.');
+      }
+    } catch (fetchError: any) {
+      // Clear the timeout if it's still active
+      clearTimeout(timeoutId);
+      
+      // Analyze the fetch error to provide more specific diagnostics
+      if (fetchError.name === 'AbortError') {
+        console.error('[DEBUG] REQUEST TIMEOUT - The request to Claude API took too long to complete');
+        throw new Error('TIMEOUT: Claude API request timed out after 120 seconds');
+      } else if (fetchError.message?.includes('NetworkError') || fetchError.message?.includes('network')) {
+        console.error('[DEBUG] NETWORK ERROR - There was a problem with the network connection to Claude API');
+        throw new Error(`NETWORK_ERROR: Network error during Claude API request: ${fetchError.message}`);
+      } else if (fetchError.message?.includes('Failed to fetch')) {
+        console.error('[DEBUG] FETCH ERROR - The fetch operation to Claude API failed');
+        // Try to determine if this is due to CORS, network change, etc.
+        if (fetchError.stack?.includes('TypeError: Failed to fetch')) {
+          console.error('[DEBUG] This appears to be a general fetch failure, possibly due to network changes or CORS issues');
+          throw new Error(`FETCH_ERROR: Failed to connect to Claude API: ${fetchError.message}`);
+        }
+      }
+      
+      // If we haven't thrown a more specific error, rethrow the original
+      throw fetchError;
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('[DEBUG] Error generating scripts:', error);
-    if (error instanceof Error) {
-      console.error('[DEBUG] Error type:', error.constructor.name);
-      console.error('[DEBUG] Error message:', error.message);
-      console.error('[DEBUG] Error stack:', error.stack);
-    } else {
-      console.error('[DEBUG] Unknown error type:', typeof error);
-    }
-    throw new Error('Failed to generate scripts. Please check your API key and try again later.');
+    
+    // Improved error logging with more details
+    const errorDetails = {
+      message: error.message || 'Unknown error',
+      name: error.name || 'Unknown',
+      stack: error.stack,
+      type: error.message?.startsWith('RATE_LIMIT:') ? 'RATE_LIMIT' :
+            error.message?.startsWith('AUTH_ERROR:') ? 'AUTH_ERROR' :
+            error.message?.startsWith('SERVER_ERROR:') ? 'SERVER_ERROR' :
+            error.message?.startsWith('HTTP_ERROR:') ? 'HTTP_ERROR' :
+            error.message?.startsWith('TIMEOUT:') ? 'TIMEOUT' :
+            error.message?.startsWith('NETWORK_ERROR:') ? 'NETWORK_ERROR' :
+            error.message?.startsWith('FETCH_ERROR:') ? 'FETCH_ERROR' :
+            error.message?.startsWith('PARSE_ERROR:') ? 'PARSE_ERROR' :
+            'UNKNOWN'
+    };
+    
+    console.error('[DEBUG] Error type:', errorDetails.type);
+    console.error('[DEBUG] Error message:', errorDetails.message);
+    console.error('[DEBUG] Full error object:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+    
+    // Rethrow with the error type prefix preserved
+    throw error;
   }
 };
