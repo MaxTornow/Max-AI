@@ -54,7 +54,10 @@ export const downloadTikTokVideo = async (downloadUrl: string): Promise<ArrayBuf
   try {
     console.log('Downloading TikTok video from:', downloadUrl);
     
-    const response = await fetch(downloadUrl, {
+    // Use the video proxy to handle HTTP/HTTPS mixed content issues in production
+    const proxyUrl = `/api/video-proxy/${encodeURIComponent(downloadUrl)}`;
+    
+    const response = await fetch(proxyUrl, {
       method: 'GET',
     });
 

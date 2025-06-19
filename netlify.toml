@@ -10,6 +10,13 @@
   force = true
   headers = {Accept = "application/json"}
 
+# Proxy for video downloads to handle HTTP/HTTPS mixed content
+[[redirects]]
+  from = "/api/video-proxy/*"
+  to = "/.netlify/functions/video-proxy"
+  status = 200
+  force = true
+
 # Proxy for Claude API with the required header
 [[redirects]]
   from = "/api/claude/*"
