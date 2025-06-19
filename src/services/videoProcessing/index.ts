@@ -14,6 +14,11 @@ export {
   downloadInstagramVideo 
 } from './instagramService';
 
+export { 
+  getTikTokVideoInfo, 
+  downloadTikTokVideo 
+} from './tiktokService';
+
 export {
   uploadVideoToAssemblyAI,
   submitTranscriptionRequest,

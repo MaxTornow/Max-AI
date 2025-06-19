@@ -18,7 +18,7 @@ export const getTikTokVideoInfo = async (url: string): Promise<InstagramVideoInf
     console.log('Fetching TikTok video info for:', url);
     
     // TikTok videos can also be fetched using the FastSaver API
-    const apiUrl = `https://fastsaverapi.com/get-info?url=${encodeURIComponent(url)}&token=${TIKTOK_API_TOKEN}`;
+    const apiUrl = `/api/fastsaver/get-info?url=${encodeURIComponent(url)}&token=${TIKTOK_API_TOKEN}`;
     
     const response = await fetch(apiUrl, {
       method: 'GET',
