@@ -109,7 +109,7 @@ const AvaChat: React.FC = () => {
           // Add a fallback greeting
           const fallbackGreeting: AvaMessage = {
             id: uuidv4(),
-            content: 'Welcome to AVA! The Advanced Viral Automator is currently being rebuilt with improved capabilities. Please check back later for an enhanced content creation experience.',
+            content: 'Welcome to AVA! The Advanced Viral Automator.',
             role: 'assistant',
             timestamp: new Date(),
           };

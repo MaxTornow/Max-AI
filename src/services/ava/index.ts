@@ -70,7 +70,7 @@ export const getInitialGreeting = async (
   
   // Return a placeholder response
   return {
-    output: 'Welcome to AVA! The Advanced Viral Automator is currently being rebuilt with improved capabilities. Please check back later for an enhanced content creation experience.',
+    output: 'Welcome to AVA! The Advanced Viral Automator.',
     conversation_id: crypto.randomUUID()
   };
 };

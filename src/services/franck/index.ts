@@ -70,7 +70,7 @@ export const getInitialGreeting = async (
   
   // Return a placeholder response
   return {
-    output: 'Welcome to FRANCK! The Advanced Viral Automator is currently being rebuilt with improved capabilities. Please check back later for an enhanced content creation experience.',
+    output: 'Welcome to FRANCK! The Facebook Relevent Niche Content Kreator.',
     conversation_id: crypto.randomUUID()
   };
 };

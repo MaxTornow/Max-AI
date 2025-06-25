@@ -70,7 +70,7 @@ export const getInitialGreeting = async (
   
   // Return a placeholder response
   return {
-    output: 'Welcome to LACY! The Advanced Viral Automator is currently being rebuilt with improved capabilities. Please check back later for an enhanced content creation experience.',
+    output: 'Welcome to LACY! The LinkedIn Content Creator for You.',
     conversation_id: crypto.randomUUID()
   };
 };
