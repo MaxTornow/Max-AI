@@ -1,0 +1,366 @@
+import { supabase } from '../supabase/client';
+import type { User } from '@supabase/supabase-js';
+
+/**
+ * LACY API response interface
+ */
+export interface LacyResponse {
+  output: string;
+  conversation_id: string;
+  search_results?: {
+    title: string;
+    url: string;
+    description: string;
+  }[];
+}
+
+/**
+ * LACY API request interface
+ */
+export interface LacyRequest {
+  message: string;
+  style: {
+    name: string;
+    niche: string;
+    target_audience: string;
+    pain_points: string[];
+    communication_style: string;
+    hero_story: string;
+  };
+  conversation_id?: string;
+}
+
+/**
+ * Message interface for LACY chat
+ */
+export interface LacyMessage {
+  id: string;
+  content: string;
+  role: 'user' | 'assistant' | 'system';
+  timestamp: Date;
+  search_results?: {
+    title: string;
+    url: string;
+    description: string;
+  }[];
+}
+
+// Note: API URL, authentication and style formatting functions removed as they're no longer needed with placeholder implementation
+
+/**
+ * Get an initial greeting from the LACY agent
+ * 
+ * This function now returns a placeholder response since the agent is being rebuilt.
+ * 
+ * @param user - The authenticated user
+ * @param style - The style to use (not used in placeholder)
+ * @param retries - Number of retries to attempt (not used in placeholder)
+ * @param retryDelay - Delay between retries in ms (not used in placeholder)
+ * @returns Promise with a placeholder LACY response
+ */
+export const getInitialGreeting = async (
+  user: User | null
+): Promise<LacyResponse> => {
+  console.log('LACY agent is being rebuilt - returning placeholder greeting');
+  
+  // If no user, throw authentication error
+  if (!user) {
+    throw new Error('Authentication required. Please log in to continue.');
+  }
+  
+  // Return a placeholder response
+  return {
+    output: 'Welcome to LACY! The Advanced Viral Automator is currently being rebuilt with improved capabilities. Please check back later for an enhanced content creation experience.',
+    conversation_id: crypto.randomUUID()
+  };
+};
+
+/**
+ * Check if the LACY agent is available
+ * @returns Promise that resolves to false as the agent is being rebuilt
+ */
+export const checkLacyHealth = async (): Promise<boolean> => {
+  console.log('LACY agent is being rebuilt - health check returning false');
+  return false;
+};
+
+/**
+ * Send a message to the LACY agent
+ * 
+ * This function sends the message and style information to the n8n webhook
+ * and returns the actual response from the webhook.
+ * 
+ * @param message - The message to send
+ * @param user - The authenticated user
+ * @param conversationId - Optional conversation ID for continuing a conversation
+ * @param style - Optional style to use
+ * @returns Promise with the LACY response
+ */
+export const sendMessage = async (
+  message: string,
+  user: User | null,
+  conversationId?: string,
+  style?: any
+): Promise<LacyResponse> => {
+  console.log('Sending message to LACY webhook', { messageLength: message?.length || 0, style });
+  
+  if (!user) {
+    throw new Error('Authentication required. Please log in to continue.');
+  }
+  
+  // Generate a conversation ID if not provided
+  const convoId = conversationId || crypto.randomUUID();
+  
+  try {
+    // Get the webhook URL from environment variables
+    const webhookUrl = import.meta.env.VITE_LACY_WEBHOOK_URL;
+    
+    if (!webhookUrl) {
+      throw new Error('LACY webhook URL not configured. Please check environment variables.');
+    }
+    
+    console.log(`Sending message to webhook: ${webhookUrl}`);
+    
+    // Prepare the payload
+    const payload = {
+      message,
+      style: style ? {
+        id: style.id,
+        name: style.name,
+        niche: style.niche,
+        target_audience: style.target_audience,
+        pain_points: style.pain_points,
+        communication_style: style.communication_style,
+        hero_story: style.hero_story
+      } : null,
+      user_id: user.id,
+      conversation_id: convoId,
+      timestamp: new Date().toISOString()
+    };
+    
+    // Send the POST request to the webhook
+    const response = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Error from LACY webhook:', errorText);
+      throw new Error(`LACY webhook returned error: ${response.status} ${response.statusText}`);
+    }
+    
+    // Parse the response
+    const data = await response.json();
+    
+    // Save the conversation
+    await saveConversation(convoId, [
+      {
+        id: crypto.randomUUID(),
+        content: message,
+        role: 'user',
+        timestamp: new Date(),
+      },
+      {
+        id: crypto.randomUUID(),
+        content: data.output,
+        role: 'assistant',
+        timestamp: new Date(),
+        search_results: data.search_results
+      }
+    ], user);
+    
+    return {
+      output: data.output,
+      conversation_id: convoId,
+      search_results: data.search_results
+    };
+  } catch (error: any) {
+    console.error('Error sending message to LACY webhook:', error);
+    
+    // Check if it's a network error (likely webhook is down)
+    if (error.message.includes('Failed to fetch') || error.message.includes('Network request failed')) {
+      return {
+        output: 'Sorry, the LACY service is currently unavailable. Please try again later.',
+        conversation_id: convoId
+      };
+    }
+    
+    // Check if it's a parsing error
+    if (error.message.includes('JSON')) {
+      const parseError = error;
+      return {
+        output: "There was an error processing the response from LACY. Technical details: " + parseError.message,
+        conversation_id: convoId
+      };
+    }
+    
+    // Return a generic error message
+    return {
+      output: `Error: ${error.message || 'Unknown error occurred'}`,
+      conversation_id: convoId
+    };
+  }
+};
+
+/**
+ * Save a conversation to the database
+ * @param conversationId - The conversation ID
+ * @param messages - The messages in the conversation
+ * @param user - The authenticated user
+ * @returns Promise with the saved conversation
+ */
+export const saveConversation = async (
+  conversationId: string,
+  messages: LacyMessage[],
+  user: User | null
+): Promise<void> => {
+  if (!user) {
+    throw new Error('Authentication required. Please log in to continue.');
+  }
+  
+  try {
+    console.log(`Saving conversation ${conversationId} with ${messages.length} messages`);
+    
+    const { error } = await supabase
+      .from('conversations')
+      .upsert({
+        id: conversationId,
+        user_id: user.id,
+        messages: messages.map(msg => ({
+          id: msg.id,
+          content: msg.content,
+          role: msg.role,
+          timestamp: msg.timestamp.toISOString(),
+          search_results: msg.search_results || null,
+        })),
+        updated_at: new Date().toISOString(),
+      });
+    
+    if (error) {
+      console.error('Error saving conversation:', error);
+      throw error;
+    }
+    
+    console.log('Conversation saved successfully');
+  } catch (error) {
+    console.error('Error saving conversation:', error);
+    throw new Error('Failed to save conversation. Please try again.');
+  }
+};
+
+/**
+ * Get a conversation from the database
+ * @param conversationId - The conversation ID
+ * @param user - The authenticated user
+ * @returns Promise with the conversation messages
+ */
+export const getConversation = async (
+  conversationId: string,
+  user: User | null
+): Promise<LacyMessage[]> => {
+  if (!user) {
+    throw new Error('Authentication required. Please log in to continue.');
+  }
+  
+  try {
+    console.log(`Getting conversation: ${conversationId}`);
+    
+    const { data, error } = await supabase
+      .from('conversations')
+      .select('messages')
+      .eq('id', conversationId)
+      .eq('user_id', user.id)
+      .single();
+    
+    if (error) {
+      console.error('Error getting conversation:', error);
+      throw error;
+    }
+    
+    console.log(`Retrieved conversation with ${data?.messages?.length || 0} messages`);
+    
+    // Convert the messages to LacyMessage objects
+    return (data?.messages || []).map((msg: any) => ({
+      id: msg.id,
+      content: msg.content,
+      role: msg.role,
+      timestamp: new Date(msg.timestamp),
+      search_results: msg.search_results || undefined,
+    }));
+  } catch (error) {
+    console.error('Error getting conversation:', error);
+    throw new Error('Failed to load conversation. Please try again.');
+  }
+};
+
+/**
+ * Get all conversations for a user
+ * @param user - The authenticated user
+ * @returns Promise with the conversations
+ */
+export const getConversations = async (
+  user: User | null
+): Promise<{ id: string; updated_at: string }[]> => {
+  if (!user) {
+    throw new Error('Authentication required. Please log in to continue.');
+  }
+  
+  try {
+    console.log('Getting all conversations for user:', user.id);
+    
+    const { data, error } = await supabase
+      .from('conversations')
+      .select('id, updated_at')
+      .eq('user_id', user.id)
+      .order('updated_at', { ascending: false });
+    
+    if (error) {
+      console.error('Error getting conversations:', error);
+      throw error;
+    }
+    
+    console.log(`Retrieved ${data?.length || 0} conversations`);
+    return data || [];
+  } catch (error) {
+    console.error('Error getting conversations:', error);
+    throw new Error('Failed to load conversations. Please try again.');
+  }
+};
+
+/**
+ * Delete a conversation
+ * @param conversationId - The conversation ID
+ * @param user - The authenticated user
+ */
+export const deleteConversation = async (
+  conversationId: string,
+  user: User | null
+): Promise<void> => {
+  if (!user) {
+    throw new Error('Authentication required. Please log in to continue.');
+  }
+  
+  try {
+    console.log(`Deleting conversation: ${conversationId}`);
+    
+    const { error } = await supabase
+      .from('conversations')
+      .delete()
+      .eq('id', conversationId)
+      .eq('user_id', user.id);
+    
+    if (error) {
+      console.error('Error deleting conversation:', error);
+      throw error;
+    }
+    
+    console.log('Conversation deleted successfully');
+  } catch (error) {
+    console.error('Error deleting conversation:', error);
+    throw new Error('Failed to delete conversation. Please try again.');
+  }
+};

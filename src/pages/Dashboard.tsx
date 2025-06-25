@@ -34,14 +34,14 @@ const Dashboard: React.FC = () => {
       color: 'bg-purple-50 dark:bg-purple-900/20',
     },
     {
-      title: 'Franck Chat',
+      title: 'FRANCK Chat',
       description: 'Facebook Relevant Automated Niche Content Kreator - Creates Facebook posts for coaching businesses',
       icon: <FiMessageSquare size={24} className="text-green-600 dark:text-green-400" />,
       path: '/franck',
       color: 'bg-green-50 dark:bg-green-900/20',
     },
     {
-      title: 'Faris Chat',
+      title: 'FARIS Chat',
       description: 'Facebook Automated Rewriting Intelligent Scholar - Rewrites Facebook posts into your personalized tone',
       icon: <FiMessageSquare size={24} className="text-teal-600 dark:text-teal-400" />,
       path: '/faris',

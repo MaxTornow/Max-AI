@@ -128,7 +128,7 @@ const FranckChat: React.FC = () => {
           // Add a fallback greeting
           const fallbackMessage: FranckMessage = {
             id: uuidv4(),
-            content: 'Welcome to Franck Chat! How can I help you create viral content today?',
+            content: 'Welcome to FRANCK Chat! How can I help you create viral content today?',
             role: 'assistant',
             timestamp: new Date()
           };
@@ -275,7 +275,7 @@ const FranckChat: React.FC = () => {
       <div className="bg-white dark:bg-gray-800 border-b dark:border-gray-700 p-4">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Franck Chat</h1>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">FRANCK Chat</h1>
             <p className="text-sm text-gray-600 dark:text-gray-400">
               {selectedStyle ? `Using style: ${selectedStyle.name}` : 'No style selected'}
             </p>
