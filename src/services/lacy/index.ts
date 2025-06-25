@@ -153,31 +153,133 @@ export const sendMessage = async (
       throw new Error(`LACY webhook returned error: ${response.status} ${response.statusText}`);
     }
     
-    // Parse the response
-    const data = await response.json();
-    
-    // Save the conversation
-    await saveConversation(convoId, [
-      {
-        id: crypto.randomUUID(),
-        content: message,
-        role: 'user',
-        timestamp: new Date(),
-      },
-      {
-        id: crypto.randomUUID(),
-        content: data.output,
-        role: 'assistant',
-        timestamp: new Date(),
-        search_results: data.search_results
+    // Parse the webhook response
+    let webhookResponseData;
+    try {
+      const responseText = await response.text();
+      console.log('Raw webhook response:', responseText);
+      
+      // Try to parse the response as JSON
+      try {
+        webhookResponseData = JSON.parse(responseText);
+      } catch (parseError) {
+        // If the response is already a string (not JSON), use it directly
+        console.log('Response is not valid JSON, using as plain text');
+        return {
+          output: responseText,
+          conversation_id: convoId
+        };
       }
-    ], user);
-    
-    return {
-      output: data.output,
-      conversation_id: convoId,
-      search_results: data.search_results
-    };
+      
+      console.log('Parsed webhook response:', webhookResponseData);
+      
+      // Handle different response formats
+      
+      // Case 1: Response has a 'response' field (n8n format)
+      if (webhookResponseData && webhookResponseData.response) {
+        console.log('Response format: Object with response field');
+        return {
+          output: webhookResponseData.response,
+          conversation_id: convoId,
+          search_results: webhookResponseData.search_results
+        };
+      }
+      
+      // Case 2: Response is an array with objects containing 'output' field
+      if (Array.isArray(webhookResponseData) && webhookResponseData.length > 0) {
+        console.log('Response format: Array');
+        
+        // Check for output field
+        if (webhookResponseData[0].output) {
+          return {
+            output: webhookResponseData[0].output,
+            conversation_id: convoId,
+            search_results: webhookResponseData[0].search_results
+          };
+        }
+        
+        // Check for response field
+        if (webhookResponseData[0].response) {
+          return {
+            output: webhookResponseData[0].response,
+            conversation_id: convoId,
+            search_results: webhookResponseData[0].search_results
+          };
+        }
+      }
+      
+      // Case 3: Response is a string (JSON stringified)
+      if (typeof webhookResponseData === 'string') {
+        console.log('Response format: String');
+        try {
+          // Try to parse it again in case it's a stringified JSON
+          const parsedAgain = JSON.parse(webhookResponseData);
+          
+          // Check for response field
+          if (parsedAgain && parsedAgain.response) {
+            return {
+              output: parsedAgain.response,
+              conversation_id: convoId,
+              search_results: parsedAgain.search_results
+            };
+          }
+          
+          // Check for array with response field
+          if (Array.isArray(parsedAgain) && parsedAgain.length > 0) {
+            if (parsedAgain[0].response) {
+              return {
+                output: parsedAgain[0].response,
+                conversation_id: convoId,
+                search_results: parsedAgain[0].search_results
+              };
+            }
+            if (parsedAgain[0].output) {
+              return {
+                output: parsedAgain[0].output,
+                conversation_id: convoId,
+                search_results: parsedAgain[0].search_results
+              };
+            }
+          }
+          
+          // If it's just a string, use it as the output
+          return {
+            output: webhookResponseData,
+            conversation_id: convoId
+          };
+        } catch (e) {
+          // If parsing fails, use the string as is
+          return {
+            output: webhookResponseData,
+            conversation_id: convoId
+          };
+        }
+      }
+      
+      // Case 4: Response is an object with 'output' field
+      if (webhookResponseData && webhookResponseData.output) {
+        console.log('Response format: Object with output field');
+        return {
+          output: webhookResponseData.output,
+          conversation_id: convoId,
+          search_results: webhookResponseData.search_results
+        };
+      }
+      
+      // If we get here, the format is unexpected
+      console.log('Unexpected response format, returning raw data');
+      return {
+        output: JSON.stringify(webhookResponseData, null, 2),
+        conversation_id: convoId
+      };
+    } catch (error) {
+      console.error('Error parsing webhook response:', error);
+      const parseError = error as Error;
+      return {
+        output: "There was an error processing the response from LACY. Technical details: " + parseError.message,
+        conversation_id: convoId
+      };
+    }
   } catch (error: any) {
     console.error('Error sending message to LACY webhook:', error);
     
@@ -225,6 +327,15 @@ export const saveConversation = async (
   try {
     console.log(`Saving conversation ${conversationId} with ${messages.length} messages`);
     
+    // Save to localStorage as a fallback
+    try {
+      localStorage.setItem('lacy_messages', JSON.stringify(messages));
+      localStorage.setItem('lacy_conversation_id', conversationId);
+    } catch (localStorageError) {
+      console.warn('Could not save to localStorage:', localStorageError);
+    }
+    
+    // Try to save to Supabase, but don't block if it fails
     const { error } = await supabase
       .from('conversations')
       .upsert({
@@ -241,13 +352,15 @@ export const saveConversation = async (
       });
     
     if (error) {
-      console.error('Error saving conversation:', error);
-      throw error;
+      console.error('Error saving conversation to Supabase:', error);
+      // Don't throw here, we've already saved to localStorage
+    } else {
+      console.log('Conversation saved successfully to Supabase');
     }
-    
-    console.log('Conversation saved successfully');
   } catch (error) {
-    console.error('Error saving conversation:', error);
+    console.error('Error in saveConversation:', error);
+    // We're still throwing here to maintain the expected behavior for callers
+    // that expect to catch this error, but we've already saved to localStorage
     throw new Error('Failed to save conversation. Please try again.');
   }
 };
