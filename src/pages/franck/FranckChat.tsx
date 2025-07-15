@@ -355,7 +355,7 @@ const FranckChat: React.FC = () => {
                 </div>
               )}
               
-              <div className="text-xs opacity-70 mt-2">
+              <div className="hidden">
                 {message.timestamp.toLocaleTimeString()}
               </div>
             </div>
@@ -366,12 +366,12 @@ const FranckChat: React.FC = () => {
         {messages.length <= 1 && !isLoading && (
           <div className="flex flex-wrap gap-2 justify-center">
             <button
-              onClick={() => handleQuickAction('Lets create a viral script')}
+              onClick={() => handleQuickAction('Let’s Create a Viral FB Post')}
               className="flex items-center space-x-2 px-4 py-2 bg-primary-100 dark:bg-primary-900 text-primary-700 dark:text-primary-300 rounded-lg hover:bg-primary-200 dark:hover:bg-primary-800 transition-colors"
             >
               <FiZap size={16} />
-              <span>Lets create a viral script</span>
-        </button>
+              <span>Let’s Create a Viral FB Post</span>
+            </button>
           </div>
         )}
         

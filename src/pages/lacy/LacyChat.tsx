@@ -346,7 +346,7 @@ const LacyChat: React.FC = () => {
                 </div>
               )}
               
-              <div className="text-xs opacity-70 mt-2">
+              <div className="hidden">
                 {message.timestamp.toLocaleTimeString()}
               </div>
             </div>
@@ -357,11 +357,11 @@ const LacyChat: React.FC = () => {
         {messages.length <= 1 && !isLoading && (
           <div className="flex flex-wrap gap-2 justify-center">
             <button
-              onClick={() => handleQuickAction("Let's create a viral post")}
+              onClick={() => handleQuickAction("Let's Create a Viral Linkedin Post")}
               className="flex items-center space-x-2 px-4 py-2 bg-primary-100 dark:bg-primary-900 text-primary-700 dark:text-primary-300 rounded-lg hover:bg-primary-200 dark:hover:bg-primary-800 transition-colors"
             >
               <FiZap size={16} />
-              <span>Let's create a viral post</span>
+              <span>Let's Create a Viral Linkedin Post</span>
             </button>
           </div>
         )}
