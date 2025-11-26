@@ -1,6 +1,10 @@
 /**
  * Supabase database types
  * Generated types for the Supabase database
+ *
+ * Last verified against actual database: 2025-01-25
+ * Tables in DB: profiles, styles, rewrites, invitations
+ * Note: conversations and messages are defined for future use (currently using localStorage fallback)
  */
 export type Database = {
   public: {
@@ -17,6 +21,7 @@ export type Database = {
             theme: 'light' | 'dark';
             notifications: boolean;
           } | null;
+          role: string; // Added: exists in DB with default 'user'
         };
         Insert: {
           id: string;
@@ -29,6 +34,7 @@ export type Database = {
             theme: 'light' | 'dark';
             notifications: boolean;
           } | null;
+          role?: string; // defaults to 'user'
         };
         Update: {
           id?: string;
@@ -41,6 +47,45 @@ export type Database = {
             theme: 'light' | 'dark';
             notifications: boolean;
           } | null;
+          role?: string;
+        };
+      };
+      invitations: {
+        Row: {
+          id: string;
+          email: string;
+          role: string;
+          token: string;
+          status: string; // 'sent' | 'accepted' | 'expired'
+          expires_at: string;
+          created_at: string;
+          created_by: string;
+          used_at: string | null;
+          user_id: string | null;
+        };
+        Insert: {
+          id?: string;
+          email: string;
+          role: string;
+          token: string;
+          status?: string; // defaults to 'sent'
+          expires_at: string;
+          created_at?: string;
+          created_by: string;
+          used_at?: string | null;
+          user_id?: string | null;
+        };
+        Update: {
+          id?: string;
+          email?: string;
+          role?: string;
+          token?: string;
+          status?: string;
+          expires_at?: string;
+          created_at?: string;
+          created_by?: string;
+          used_at?: string | null;
+          user_id?: string | null;
         };
       };
       conversations: {
@@ -202,6 +247,80 @@ export type Database = {
             communication_style: string;
             hero_story: string | null;
           };
+        };
+      };
+      videos: {
+        Row: {
+          id: string;
+          created_at: string;
+          updated_at: string;
+          user_id: string;
+          title: string;
+          original_filename: string;
+          file_size_bytes: number | null;
+          duration_seconds: number | null;
+          original_storage_path: string;
+          processed_storage_path: string | null;
+          submagic_project_id: string | null;
+          submagic_status: 'pending' | 'processing' | 'completed' | 'failed';
+          submagic_download_url: string | null;
+          template_name: string;
+          language: string;
+          magic_zooms: boolean;
+          magic_brolls: boolean;
+          magic_brolls_percentage: number;
+          error_message: string | null;
+          retry_count: number;
+          processing_started_at: string | null;
+          processing_completed_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          created_at?: string;
+          updated_at?: string;
+          user_id: string;
+          title: string;
+          original_filename: string;
+          file_size_bytes?: number | null;
+          duration_seconds?: number | null;
+          original_storage_path: string;
+          processed_storage_path?: string | null;
+          submagic_project_id?: string | null;
+          submagic_status?: 'pending' | 'processing' | 'completed' | 'failed';
+          submagic_download_url?: string | null;
+          template_name: string;
+          language?: string;
+          magic_zooms?: boolean;
+          magic_brolls?: boolean;
+          magic_brolls_percentage?: number;
+          error_message?: string | null;
+          retry_count?: number;
+          processing_started_at?: string | null;
+          processing_completed_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          created_at?: string;
+          updated_at?: string;
+          user_id?: string;
+          title?: string;
+          original_filename?: string;
+          file_size_bytes?: number | null;
+          duration_seconds?: number | null;
+          original_storage_path?: string;
+          processed_storage_path?: string | null;
+          submagic_project_id?: string | null;
+          submagic_status?: 'pending' | 'processing' | 'completed' | 'failed';
+          submagic_download_url?: string | null;
+          template_name?: string;
+          language?: string;
+          magic_zooms?: boolean;
+          magic_brolls?: boolean;
+          magic_brolls_percentage?: number;
+          error_message?: string | null;
+          retry_count?: number;
+          processing_started_at?: string | null;
+          processing_completed_at?: string | null;
         };
       };
     };

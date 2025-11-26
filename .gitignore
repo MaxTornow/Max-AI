@@ -12,3 +12,8 @@ node_modules
 
 # Build output
 dist
+
+# Claude
+.claude
+betty-ready
+PRPs
