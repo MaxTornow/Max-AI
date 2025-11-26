@@ -3,18 +3,19 @@ import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import logoImage from '../../assets/Smartphone Freedom Lifestyle Logo 1.png';
-import { 
-  FiHome, 
-  FiMessageSquare, 
-  FiCopy, 
-  FiList, 
-  FiSettings, 
-  FiLogOut, 
-  FiMenu, 
-  FiX, 
-  FiMoon, 
-  FiSun, 
-  FiUser 
+import {
+  FiHome,
+  FiMessageSquare,
+  FiCopy,
+  FiList,
+  FiSettings,
+  FiLogOut,
+  FiMenu,
+  FiX,
+  FiMoon,
+  FiSun,
+  FiUser,
+  FiFilm
 } from 'react-icons/fi';
 
 /**
@@ -50,6 +51,7 @@ const MainLayout: React.FC = () => {
     { path: '/lacy', label: 'LACY (LinkedIn Automated Content for You)', icon: <FiMessageSquare size={20} /> },
     { path: '/franck', label: 'FRANCK (Facebook Relevant Automated Niche Content Kreator)', icon: <FiMessageSquare size={20} /> },
     { path: '/faris', label: 'FARIS (Facebook Automated Rewriting Intelligent Scholar)', icon: <FiMessageSquare size={20} /> },
+    { path: '/betty', label: 'BETTY (Batch Editing Tool for Trending YouTube)', icon: <FiFilm size={20} /> },
     { path: '/my-styles', label: 'My Styles', icon: <FiList size={20} /> },
     { path: '/all-rewrites', label: 'All Rewrites', icon: <FiList size={20} /> },
     { path: '/settings', label: 'Settings', icon: <FiSettings size={20} /> },

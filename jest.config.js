@@ -3,8 +3,16 @@ export default {
   preset: 'ts-jest',
   testEnvironment: 'node',
   moduleNameMapper: {
-    // Handle module aliases (if you're using them in your project)
+    // Handle module aliases to match tsconfig.json paths
     '^@/(.*)$': '<rootDir>/src/$1',
+    '^@components/(.*)$': '<rootDir>/src/components/$1',
+    '^@pages/(.*)$': '<rootDir>/src/pages/$1',
+    '^@hooks/(.*)$': '<rootDir>/src/hooks/$1',
+    '^@context/(.*)$': '<rootDir>/src/context/$1',
+    '^@utils/(.*)$': '<rootDir>/src/utils/$1',
+    '^@services/(.*)$': '<rootDir>/src/services/$1',
+    '^@assets/(.*)$': '<rootDir>/src/assets/$1',
+    '^@types/(.*)$': '<rootDir>/src/types/$1',
   },
   transform: {
     '^.+\\.tsx?$': ['ts-jest', {
@@ -17,4 +25,13 @@ export default {
   rootDir: '.',
   // The test match pattern
   testMatch: ['**/__tests__/**/*.test.(ts|tsx|js)'],
+  // Setup for import.meta.env (Vite environment variables)
+  globals: {
+    'import.meta': {
+      env: {
+        VITE_SUBMAGIC_API_URL: 'https://api.submagic.co/v1',
+        VITE_SUBMAGIC_API_KEY: 'test-api-key',
+      },
+    },
+  },
 };
