@@ -1,6 +1,6 @@
 import React from 'react';
 import { FiLoader, FiCheck, FiX, FiRefreshCw } from 'react-icons/fi';
-import type { ProcessingState } from '@services/betty/types';
+import type { ProcessingState } from '@services/vince/types';
 
 interface ProcessingProgressProps {
   state: ProcessingState;

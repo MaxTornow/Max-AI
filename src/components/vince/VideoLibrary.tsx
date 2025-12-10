@@ -1,7 +1,7 @@
 import React from 'react';
 import { FiFilm, FiRefreshCw } from 'react-icons/fi';
 import VideoCard from './VideoCard';
-import type { Video } from '@services/betty/types';
+import type { Video } from '@services/vince/types';
 
 interface VideoLibraryProps {
   videos: Video[];

@@ -5,12 +5,12 @@ import { FiPlay, FiLoader } from 'react-icons/fi';
 import { useAuth } from '@context/AuthContext';
 import { useToast } from '@context/ToastContext';
 
-import TabNav, { BettyTab } from '@components/betty/TabNav';
-import VideoUploader from '@components/betty/VideoUploader';
-import TemplateSelector from '@components/betty/TemplateSelector';
-import FeatureToggles from '@components/betty/FeatureToggles';
-import ProcessingProgress from '@components/betty/ProcessingProgress';
-import VideoLibrary from '@components/betty/VideoLibrary';
+import TabNav, { VinceTab } from '@components/vince/TabNav';
+import VideoUploader from '@components/vince/VideoUploader';
+import TemplateSelector from '@components/vince/TemplateSelector';
+import FeatureToggles from '@components/vince/FeatureToggles';
+import ProcessingProgress from '@components/vince/ProcessingProgress';
+import VideoLibrary from '@components/vince/VideoLibrary';
 
 import {
   uploadVideoToStorage,
@@ -22,28 +22,28 @@ import {
   getSubmagicProjectStatus,
   saveProcessedVideo,
   getVideoSignedUrl,
-} from '@services/betty';
-import { BETTY_TEMPLATES, getDefaultTemplate } from '@services/betty/templates';
-import type { Video, BettyTemplate, UploadState, ProcessingState } from '@services/betty/types';
+} from '@services/vince';
+import { VINCE_TEMPLATES, getDefaultTemplate } from '@services/vince/templates';
+import type { Video, VinceTemplate, UploadState, ProcessingState } from '@services/vince/types';
 
 const POLL_INTERVAL = parseInt(import.meta.env.VITE_SUBMAGIC_POLL_INTERVAL_MS || '30000');
 
 /**
- * BETTY Page - AI Video Editor
+ * VINCE Page - Vertical INstant Content Editor
  * Single page with Editor and Library tabs
  */
-const BettyPage: React.FC = () => {
+const VincePage: React.FC = () => {
   const { user } = useAuth();
   const { showToast } = useToast();
   const queryClient = useQueryClient();
 
   // Tab state
-  const [activeTab, setActiveTab] = useState<BettyTab>('editor');
+  const [activeTab, setActiveTab] = useState<VinceTab>('editor');
 
   // Editor state
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [videoTitle, setVideoTitle] = useState('');
-  const [selectedTemplate, setSelectedTemplate] = useState<BettyTemplate>(getDefaultTemplate());
+  const [selectedTemplate, setSelectedTemplate] = useState<VinceTemplate>(getDefaultTemplate());
   const [magicZooms, setMagicZooms] = useState(selectedTemplate.defaults.magicZooms);
   const [magicBrolls, setMagicBrolls] = useState(selectedTemplate.defaults.magicBrolls);
   const [magicBrollsPercentage, setMagicBrollsPercentage] = useState(
@@ -67,7 +67,7 @@ const BettyPage: React.FC = () => {
     isLoading: isLoadingVideos,
     refetch: refetchVideos,
   } = useQuery(
-    ['betty-videos', user?.id],
+    ['vince-videos', user?.id],
     () => getUserVideos(user!.id),
     {
       enabled: !!user?.id,
@@ -77,7 +77,7 @@ const BettyPage: React.FC = () => {
 
   // Poll for processing status when we have an active project
   const { data: projectStatus } = useQuery(
-    ['betty-project', currentProjectId],
+    ['vince-project', currentProjectId],
     () => getSubmagicProjectStatus(currentProjectId!),
     {
       enabled: !!currentProjectId && processingState.status === 'processing',
@@ -158,7 +158,7 @@ const BettyPage: React.FC = () => {
   }, [projectStatus, currentVideoId, user, selectedFile, showToast, refetchVideos]);
 
   // Update feature toggles when template changes
-  const handleTemplateChange = useCallback((template: BettyTemplate) => {
+  const handleTemplateChange = useCallback((template: VinceTemplate) => {
     setSelectedTemplate(template);
     setMagicZooms(template.defaults.magicZooms);
     setMagicBrolls(template.defaults.magicBrolls);
@@ -287,7 +287,7 @@ const BettyPage: React.FC = () => {
     setActiveTab('editor');
     setVideoTitle(video.title);
 
-    const template = BETTY_TEMPLATES.find(
+    const template = VINCE_TEMPLATES.find(
       (t) => t.submagicTemplateName === video.template_name
     );
     if (template) {
@@ -351,10 +351,10 @@ const BettyPage: React.FC = () => {
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-          BETTY
+          VINCE
         </h1>
         <p className="text-gray-500 dark:text-gray-400 mt-1">
-          Batch Editing Tool for Trending YouTube videos
+          Vertical INstant Content Editor
         </p>
       </div>
 
@@ -494,4 +494,4 @@ const BettyPage: React.FC = () => {
   );
 };
 
-export default BettyPage;
+export default VincePage;

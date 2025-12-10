@@ -33,7 +33,7 @@ import CreateRewrite from './pages/vera/CreateRewrite';
 import MyStyles from './pages/styles/MyStyles';
 import AllRewrites from './pages/rewrites/AllRewrites';
 import Settings from './pages/settings/Settings';
-import BettyPage from './pages/betty/BettyPage';
+import VincePage from './pages/vince/VincePage';
 import SimpleTextOverlayPage from './pages/tyler/SimpleTextOverlayPage';
 
 // Error Pages
@@ -89,7 +89,7 @@ const AppContent: React.FC = () => {
           <Route path="create-rewrite" element={<CreateRewrite />} />
           <Route path="my-styles" element={<MyStyles />} />
           <Route path="all-rewrites" element={<AllRewrites />} />
-          <Route path="betty" element={<BettyPage />} />
+          <Route path="vince" element={<VincePage />} />
           <Route path="tyler" element={<SimpleTextOverlayPage />} />
           <Route path="settings" element={<Settings />} />
         </Route>

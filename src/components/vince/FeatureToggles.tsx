@@ -1,6 +1,6 @@
 import React from 'react';
 import { FiZoomIn, FiImage, FiGlobe } from 'react-icons/fi';
-import { SUPPORTED_LANGUAGES } from '@services/betty/types';
+import { SUPPORTED_LANGUAGES } from '@services/vince/types';
 
 interface FeatureTogglesProps {
   magicZooms: boolean;

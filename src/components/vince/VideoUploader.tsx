@@ -1,7 +1,7 @@
 import React, { useCallback } from 'react';
 import { useDropzone, FileRejection } from 'react-dropzone';
 import { FiUploadCloud, FiX, FiVideo, FiAlertCircle } from 'react-icons/fi';
-import { ACCEPTED_VIDEO_TYPES, MAX_FILE_SIZE } from '@services/betty/types';
+import { ACCEPTED_VIDEO_TYPES, MAX_FILE_SIZE } from '@services/vince/types';
 
 interface VideoUploaderProps {
   onFileAccepted: (file: File) => void;

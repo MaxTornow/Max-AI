@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { FiDownload, FiRefreshCw, FiTrash2, FiClock, FiAlertCircle, FiCheck, FiLoader } from 'react-icons/fi';
 import { format } from 'date-fns';
-import type { Video, SubmagicStatus } from '@services/betty/types';
-import { getTemplateBySubmagicName } from '@services/betty/templates';
+import type { Video, SubmagicStatus } from '@services/vince/types';
+import { getTemplateBySubmagicName } from '@services/vince/templates';
 
 interface VideoCardProps {
   video: Video;

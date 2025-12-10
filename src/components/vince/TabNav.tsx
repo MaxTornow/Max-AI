@@ -1,19 +1,19 @@
 import React from 'react';
 import { FiEdit3, FiFolder } from 'react-icons/fi';
 
-export type BettyTab = 'editor' | 'library';
+export type VinceTab = 'editor' | 'library';
 
 interface TabNavProps {
-  activeTab: BettyTab;
-  onTabChange: (tab: BettyTab) => void;
+  activeTab: VinceTab;
+  onTabChange: (tab: VinceTab) => void;
   libraryCount?: number;
 }
 
 /**
- * Tab navigation component for BETTY (Editor | Library)
+ * Tab navigation component for VINCE (Editor | Library)
  */
 const TabNav: React.FC<TabNavProps> = ({ activeTab, onTabChange, libraryCount }) => {
-  const tabs: { key: BettyTab; label: string; icon: React.ReactNode }[] = [
+  const tabs: { key: VinceTab; label: string; icon: React.ReactNode }[] = [
     { key: 'editor', label: 'Editor', icon: <FiEdit3 size={18} /> },
     { key: 'library', label: 'Library', icon: <FiFolder size={18} /> },
   ];

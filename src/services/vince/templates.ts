@@ -1,5 +1,5 @@
 /**
- * BETTY Template Definitions
+ * VINCE Template Definitions
  *
  * All 8 template names confirmed against Submagic API
  * Source: https://docs.submagic.co/api-reference/templates
@@ -12,9 +12,9 @@
  * Note: Template names are case-sensitive. Default is "Sara" if none specified.
  */
 
-import type { BettyTemplate } from './types';
+import type { VinceTemplate } from './types';
 
-export const BETTY_TEMPLATES: BettyTemplate[] = [
+export const VINCE_TEMPLATES: VinceTemplate[] = [
   {
     key: 'bold-energetic',
     name: 'Bold & Energetic',
@@ -84,16 +84,16 @@ export const BETTY_TEMPLATES: BettyTemplate[] = [
 /**
  * Get a template by its key
  */
-export const getTemplateByKey = (key: string): BettyTemplate | undefined =>
-  BETTY_TEMPLATES.find(t => t.key === key);
+export const getTemplateByKey = (key: string): VinceTemplate | undefined =>
+  VINCE_TEMPLATES.find(t => t.key === key);
 
 /**
  * Get a template by its Submagic name
  */
-export const getTemplateBySubmagicName = (name: string): BettyTemplate | undefined =>
-  BETTY_TEMPLATES.find(t => t.submagicTemplateName === name);
+export const getTemplateBySubmagicName = (name: string): VinceTemplate | undefined =>
+  VINCE_TEMPLATES.find(t => t.submagicTemplateName === name);
 
 /**
  * Get the default template
  */
-export const getDefaultTemplate = (): BettyTemplate => BETTY_TEMPLATES[0];
+export const getDefaultTemplate = (): VinceTemplate => VINCE_TEMPLATES[0];

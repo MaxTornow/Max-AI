@@ -1,6 +1,6 @@
 /**
- * BETTY - AI Video Editor Types
- * Batch Editing Tool for Trending YouTube videos
+ * VINCE - AI Video Editor Types
+ * Vertical INstant Content Editor
  */
 
 /** Submagic processing status values */
@@ -77,7 +77,7 @@ export interface Video {
 }
 
 /** Template definition */
-export interface BettyTemplate {
+export interface VinceTemplate {
   key: string;
   name: string;
   submagicTemplateName: string;

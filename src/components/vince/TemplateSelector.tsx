@@ -1,11 +1,11 @@
 import React from 'react';
 import { FiCheck } from 'react-icons/fi';
-import { BETTY_TEMPLATES } from '@services/betty/templates';
-import type { BettyTemplate } from '@services/betty/types';
+import { VINCE_TEMPLATES } from '@services/vince/templates';
+import type { VinceTemplate } from '@services/vince/types';
 
 interface TemplateSelectorProps {
-  selectedTemplate: BettyTemplate;
-  onSelectTemplate: (template: BettyTemplate) => void;
+  selectedTemplate: VinceTemplate;
+  onSelectTemplate: (template: VinceTemplate) => void;
   disabled?: boolean;
 }
 
@@ -23,7 +23,7 @@ const TemplateSelector: React.FC<TemplateSelectorProps> = ({
         Choose Template Style
       </label>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {BETTY_TEMPLATES.map((template) => {
+        {VINCE_TEMPLATES.map((template) => {
           const isSelected = selectedTemplate.key === template.key;
           return (
             <button
