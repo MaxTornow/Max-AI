@@ -34,6 +34,7 @@ import MyStyles from './pages/styles/MyStyles';
 import AllRewrites from './pages/rewrites/AllRewrites';
 import Settings from './pages/settings/Settings';
 import BettyPage from './pages/betty/BettyPage';
+import SimpleTextOverlayPage from './pages/tyler/SimpleTextOverlayPage';
 
 // Error Pages
 import NotFound from './pages/errors/NotFound';
@@ -89,6 +90,7 @@ const AppContent: React.FC = () => {
           <Route path="my-styles" element={<MyStyles />} />
           <Route path="all-rewrites" element={<AllRewrites />} />
           <Route path="betty" element={<BettyPage />} />
+          <Route path="tyler" element={<SimpleTextOverlayPage />} />
           <Route path="settings" element={<Settings />} />
         </Route>
       </Route>
