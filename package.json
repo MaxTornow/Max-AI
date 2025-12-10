@@ -12,6 +12,9 @@
     "test": "jest"
   },
   "dependencies": {
+    "@ffmpeg/core": "^0.12.10",
+    "@ffmpeg/ffmpeg": "^0.12.15",
+    "@ffmpeg/util": "^0.12.2",
     "@supabase/supabase-js": "^2.38.0",
     "@types/uuid": "^10.0.0",
     "classnames": "^2.3.2",

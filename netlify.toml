@@ -2,6 +2,13 @@
   command = "chmod +x build.sh && ./build.sh"
   publish = "dist"
 
+# COOP/COEP headers required for ffmpeg.wasm SharedArrayBuffer
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Cross-Origin-Opener-Policy = "same-origin"
+    Cross-Origin-Embedder-Policy = "require-corp"
+
 # Proxy for FastSaver API
 [[redirects]]
   from = "/api/fastsaver/*"
