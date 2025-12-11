@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { FiPlay, FiLoader, FiRefreshCw } from 'react-icons/fi';
+import { FiPlay, FiLoader, FiRefreshCw, FiX } from 'react-icons/fi';
 
 import { useToast } from '@context/ToastContext';
 import { useExport } from '@context/ExportContext';
@@ -33,7 +33,7 @@ interface PersistedState {
  */
 const SimpleTextOverlayPage: React.FC = () => {
     const { showToast } = useToast();
-    const { state: exportState, startExport, clearExport, isExporting } = useExport();
+    const { state: exportState, startExport, cancelExport, clearExport, isExporting } = useExport();
     const videoFileRef = useRef<File | null>(null);
     const hasRestoredRef = useRef(false);
 
@@ -244,6 +244,38 @@ const SimpleTextOverlayPage: React.FC = () => {
                         )}
                     </div>
 
+                    {/* Export Button - in left column to avoid being covered by popup */}
+                    {!isCompleted && (
+                        <button
+                            onClick={handleExport}
+                            disabled={!canExport}
+                            className="w-full flex items-center justify-center gap-2 px-6 py-3 text-white bg-primary-600 hover:bg-primary-700 disabled:bg-gray-400 disabled:cursor-not-allowed rounded-lg font-medium transition-colors"
+                        >
+                            {isExporting ? (
+                                <>
+                                    <FiLoader className="w-5 h-5 animate-spin" />
+                                    Processing...
+                                </>
+                            ) : (
+                                <>
+                                    <FiPlay className="w-5 h-5" />
+                                    Export Video
+                                </>
+                            )}
+                        </button>
+                    )}
+
+                    {/* Cancel Export Button - only during export */}
+                    {isExporting && (
+                        <button
+                            onClick={cancelExport}
+                            className="w-full flex items-center justify-center gap-2 px-6 py-3 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg font-medium transition-colors"
+                        >
+                            <FiX className="w-5 h-5" />
+                            Cancel Export
+                        </button>
+                    )}
+
                     {/* Start New Button (after completion) */}
                     {isCompleted && (
                         <button
@@ -269,27 +301,6 @@ const SimpleTextOverlayPage: React.FC = () => {
                             disabled={isExporting || isCompleted}
                         />
                     </div>
-
-                    {/* Export Button */}
-                    {!isCompleted && (
-                        <button
-                            onClick={handleExport}
-                            disabled={!canExport}
-                            className="w-full flex items-center justify-center gap-2 px-6 py-3 text-white bg-primary-600 hover:bg-primary-700 disabled:bg-gray-400 disabled:cursor-not-allowed rounded-lg font-medium transition-colors"
-                        >
-                            {isExporting ? (
-                                <>
-                                    <FiLoader className="w-5 h-5 animate-spin" />
-                                    Processing...
-                                </>
-                            ) : (
-                                <>
-                                    <FiPlay className="w-5 h-5" />
-                                    Export Video
-                                </>
-                            )}
-                        </button>
-                    )}
                 </div>
             </div>
         </div>
