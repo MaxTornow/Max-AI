@@ -2,28 +2,21 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { FiPlay, FiLoader, FiRefreshCw } from 'react-icons/fi';
 
 import { useToast } from '@context/ToastContext';
+import { useExport } from '@context/ExportContext';
 
 import {
     VideoUploader,
     VideoPreview,
     TextEditor,
-    ExportProgress,
 } from '@components/tyler';
 
 import {
-    ffmpegService,
     DEFAULT_SETTINGS,
     storeVideo,
     retrieveVideo,
     clearAllVideos,
-    storeOutputVideo,
-    retrieveOutputVideo,
 } from '@services/tyler';
-import type {
-    TextOverlaySettings,
-    FFmpegLoadState,
-    ProcessingState,
-} from '@services/tyler/types';
+import type { TextOverlaySettings } from '@services/tyler/types';
 
 const STORAGE_KEY = 'tyler_state';
 
@@ -31,16 +24,16 @@ interface PersistedState {
     settings: TextOverlaySettings;
     videoFileName: string | null;
     videoDimensions: { width: number; height: number; duration: number } | null;
-    hasCompletedExport: boolean;
 }
 
 /**
  * TYLER - Simple Text Overlay Page
  * Browser-based video text overlay with ffmpeg.wasm
- * State persists across navigation using sessionStorage + IndexedDB
+ * Export state is managed globally via ExportContext
  */
 const SimpleTextOverlayPage: React.FC = () => {
     const { showToast } = useToast();
+    const { state: exportState, startExport, clearExport, isExporting } = useExport();
     const videoFileRef = useRef<File | null>(null);
     const hasRestoredRef = useRef(false);
 
@@ -59,7 +52,7 @@ const SimpleTextOverlayPage: React.FC = () => {
 
     const persisted = loadPersistedState();
 
-    // Video state
+    // Video state (local to this page)
     const [videoFile, setVideoFile] = useState<File | null>(null);
     const [videoUrl, setVideoUrl] = useState<string | null>(null);
     const [videoDimensions, setVideoDimensions] = useState<{
@@ -79,14 +72,7 @@ const SimpleTextOverlayPage: React.FC = () => {
         persisted?.videoFileName || null
     );
 
-    // Processing state
-    const [ffmpegState, setFFmpegState] = useState<FFmpegLoadState>({ status: 'idle' });
-    const [processingState, setProcessingState] = useState<ProcessingState>({ status: 'idle' });
-
-    // Output state
-    const [outputBlobUrl, setOutputBlobUrl] = useState<string | null>(null);
-
-    // Restore video and export state from IndexedDB on mount
+    // Restore video from IndexedDB on mount
     useEffect(() => {
         if (hasRestoredRef.current) return;
         hasRestoredRef.current = true;
@@ -105,17 +91,6 @@ const SimpleTextOverlayPage: React.FC = () => {
                         setVideoFileName(storedFile.name);
                     }
                 }
-
-                // Restore completed export if exists
-                if (persisted?.hasCompletedExport) {
-                    const outputBlob = await retrieveOutputVideo();
-                    if (outputBlob) {
-                        const blobUrl = URL.createObjectURL(outputBlob);
-                        setOutputBlobUrl(blobUrl);
-                        setProcessingState({ status: 'completed', blobUrl });
-                        setFFmpegState({ status: 'loaded' });
-                    }
-                }
             } catch (error) {
                 console.warn('Failed to restore state:', error);
             } finally {
@@ -132,14 +107,13 @@ const SimpleTextOverlayPage: React.FC = () => {
             settings,
             videoFileName,
             videoDimensions,
-            hasCompletedExport: processingState.status === 'completed',
         };
         try {
             sessionStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave));
         } catch (e) {
             console.warn('Failed to save Tyler state to sessionStorage:', e);
         }
-    }, [settings, videoFileName, videoDimensions, processingState.status]);
+    }, [settings, videoFileName, videoDimensions]);
 
     // Handle file selection
     const handleFileAccepted = useCallback(async (file: File) => {
@@ -147,53 +121,46 @@ const SimpleTextOverlayPage: React.FC = () => {
         if (videoUrl) {
             URL.revokeObjectURL(videoUrl);
         }
-        if (outputBlobUrl) {
-            URL.revokeObjectURL(outputBlobUrl);
-            setOutputBlobUrl(null);
-        }
 
         const url = URL.createObjectURL(file);
         setVideoFile(file);
         videoFileRef.current = file;
         setVideoUrl(url);
         setVideoFileName(file.name);
-        // Don't reset settings - keep them so user can reuse
-        setFFmpegState({ status: 'idle' });
-        setProcessingState({ status: 'idle' });
+
+        // Clear any previous export state
+        clearExport();
 
         // Store video in IndexedDB for persistence
         await storeVideo(file);
-    }, [videoUrl, outputBlobUrl]);
+    }, [videoUrl, clearExport]);
 
     // Handle file removal
     const handleFileRemoved = useCallback(async () => {
         if (videoUrl) {
             URL.revokeObjectURL(videoUrl);
         }
-        if (outputBlobUrl) {
-            URL.revokeObjectURL(outputBlobUrl);
-        }
         setVideoFile(null);
         videoFileRef.current = null;
         setVideoUrl(null);
         setVideoDimensions(null);
         setVideoFileName(null);
-        setOutputBlobUrl(null);
         setSettings(DEFAULT_SETTINGS);
-        setFFmpegState({ status: 'idle' });
-        setProcessingState({ status: 'idle' });
+
+        // Clear export state
+        clearExport();
 
         // Clear all storage
         sessionStorage.removeItem(STORAGE_KEY);
         await clearAllVideos();
-    }, [videoUrl, outputBlobUrl]);
+    }, [videoUrl, clearExport]);
 
     // Handle video metadata loaded
     const handleVideoLoad = useCallback((width: number, height: number, duration: number) => {
         setVideoDimensions({ width, height, duration });
     }, []);
 
-    // Export video with text overlay
+    // Export video with text overlay via global ExportContext
     const handleExport = async () => {
         const currentFile = videoFile || videoFileRef.current;
         if (!currentFile || !videoDimensions) {
@@ -206,92 +173,21 @@ const SimpleTextOverlayPage: React.FC = () => {
             return;
         }
 
-        try {
-            // Step 1: Load FFmpeg if needed
-            if (!ffmpegService.isLoaded()) {
-                setFFmpegState({ status: 'loading', progress: 0 });
-
-                await ffmpegService.load((progress) => {
-                    setFFmpegState({ status: 'loading', progress });
-                });
-
-                setFFmpegState({ status: 'loaded' });
-            }
-
-            // Step 2: Process video
-            setProcessingState({ status: 'processing', progress: 0 });
-
-            const outputBlob = await ffmpegService.processVideo(
-                currentFile,
-                settings,
-                videoDimensions.width,
-                videoDimensions.height,
-                (progress) => {
-                    setProcessingState({ status: 'processing', progress });
-                }
-            );
-
-            // Create blob URL for download
-            const blobUrl = URL.createObjectURL(outputBlob);
-            setOutputBlobUrl(blobUrl);
-            setProcessingState({ status: 'completed', blobUrl });
-
-            // Store output in IndexedDB for persistence across navigation
-            await storeOutputVideo(outputBlob);
-
-            showToast('Video exported successfully!', 'success');
-
-        } catch (error) {
-            console.error('Export error:', error);
-            const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
-
-            if (ffmpegState.status === 'loading') {
-                setFFmpegState({ status: 'error', message: errorMessage });
-            } else {
-                setProcessingState({ status: 'error', message: errorMessage });
-            }
-
-            showToast(errorMessage, 'error');
-        }
+        // Use the global export context
+        await startExport(currentFile, settings, {
+            width: videoDimensions.width,
+            height: videoDimensions.height,
+        });
     };
-
-    // Download processed video
-    const handleDownload = useCallback(() => {
-        const currentFile = videoFile || videoFileRef.current;
-        if (!outputBlobUrl || !currentFile) return;
-
-        const link = document.createElement('a');
-        link.href = outputBlobUrl;
-        link.download = `${currentFile.name.replace(/\.[^.]+$/, '')}_overlay.mp4`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-
-        showToast('Download started!', 'success');
-    }, [outputBlobUrl, videoFile, showToast]);
-
-    // Reset for retry
-    const handleRetry = useCallback(() => {
-        setFFmpegState({ status: ffmpegService.isLoaded() ? 'loaded' : 'idle' });
-        setProcessingState({ status: 'idle' });
-        if (outputBlobUrl) {
-            URL.revokeObjectURL(outputBlobUrl);
-            setOutputBlobUrl(null);
-        }
-    }, [outputBlobUrl]);
 
     // Start new video
     const handleStartNew = useCallback(() => {
         handleFileRemoved();
     }, [handleFileRemoved]);
 
-    const isProcessing =
-        ffmpegState.status === 'loading' ||
-        processingState.status === 'processing';
+    const isCompleted = exportState.status === 'completed';
 
-    const isCompleted = processingState.status === 'completed';
-
-    const canExport = (videoFile || videoFileRef.current) && videoDimensions && settings.text.trim() && !isProcessing;
+    const canExport = (videoFile || videoFileRef.current) && videoDimensions && settings.text.trim() && !isExporting;
 
     return (
         <div className="max-w-6xl mx-auto">
@@ -326,7 +222,7 @@ const SimpleTextOverlayPage: React.FC = () => {
                                 onFileAccepted={handleFileAccepted}
                                 onFileRemoved={handleFileRemoved}
                                 selectedFile={videoFile}
-                                disabled={isProcessing}
+                                disabled={isExporting}
                             />
                         ) : (
                             <>
@@ -336,7 +232,7 @@ const SimpleTextOverlayPage: React.FC = () => {
                                     onVideoLoad={handleVideoLoad}
                                 />
 
-                                {!isProcessing && !isCompleted && (
+                                {!isExporting && !isCompleted && (
                                     <button
                                         onClick={handleFileRemoved}
                                         className="mt-4 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
@@ -347,16 +243,6 @@ const SimpleTextOverlayPage: React.FC = () => {
                             </>
                         )}
                     </div>
-
-                    {/* Export Progress */}
-                    {(ffmpegState.status !== 'idle' || processingState.status !== 'idle') && (
-                        <ExportProgress
-                            ffmpegState={ffmpegState}
-                            processingState={processingState}
-                            onDownload={handleDownload}
-                            onRetry={handleRetry}
-                        />
-                    )}
 
                     {/* Start New Button (after completion) */}
                     {isCompleted && (
@@ -380,7 +266,7 @@ const SimpleTextOverlayPage: React.FC = () => {
                         <TextEditor
                             settings={settings}
                             onChange={setSettings}
-                            disabled={isProcessing || isCompleted}
+                            disabled={isExporting || isCompleted}
                         />
                     </div>
 
@@ -391,7 +277,7 @@ const SimpleTextOverlayPage: React.FC = () => {
                             disabled={!canExport}
                             className="w-full flex items-center justify-center gap-2 px-6 py-3 text-white bg-primary-600 hover:bg-primary-700 disabled:bg-gray-400 disabled:cursor-not-allowed rounded-lg font-medium transition-colors"
                         >
-                            {isProcessing ? (
+                            {isExporting ? (
                                 <>
                                     <FiLoader className="w-5 h-5 animate-spin" />
                                     Processing...

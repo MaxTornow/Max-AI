@@ -7,7 +7,7 @@ import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile, toBlobURL } from '@ffmpeg/util';
 import { FONTS } from './constants';
 import { escapeTextForFFmpeg } from './textUtils';
-import type { TextOverlaySettings, TextPosition, TextAlignment } from './types';
+import type { TextOverlaySettings, TextAlignment } from './types';
 
 // CRITICAL: Load from unpkg CDN for proper SharedArrayBuffer support
 const BASE_URL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
@@ -141,7 +141,8 @@ class FFmpegService {
             const totalTextHeight = lines.length * lineHeight;
 
             // Calculate base Y position for the text block
-            const baseY = this.getBaseYPosition(settings.position, videoHeight, totalTextHeight);
+            // CRITICAL: This formula MUST match getYPosition in VideoPreview.tsx exactly
+            const baseY = this.getBaseYPosition(settings.yPositionPercent, videoHeight, totalTextHeight);
 
             // Build filter chain with one drawtext per line
             const drawtextFilters = lines.map((line, index) => {
@@ -212,38 +213,26 @@ class FFmpegService {
 
     /**
      * Calculate base Y position in pixels for the text block
+     * CRITICAL: This formula MUST match getYPosition in VideoPreview.tsx exactly
+     *
+     * Formula: yPosition = height * (yPositionPercent / 100) - totalTextHeight / 2
+     * Clamped to [0, height - totalTextHeight] to keep text fully visible
      */
-    private getBaseYPosition(position: TextPosition, videoHeight: number, totalTextHeight: number): number {
-        switch (position) {
-            case 'top':
-                return Math.round(videoHeight * 0.10);
-            case 'middle':
-                return Math.round((videoHeight - totalTextHeight) / 2);
-            case 'bottom':
-                return Math.round(videoHeight * 0.85 - totalTextHeight);
-        }
+    private getBaseYPosition(yPositionPercent: number, videoHeight: number, totalTextHeight: number): number {
+        // FORMULA: percentage of height, offset by half text height for centering
+        // 0% with clamp = top edge at top
+        // 50% = centered
+        // 100% with clamp = bottom edge at bottom
+        const yPosition = videoHeight * (yPositionPercent / 100) - totalTextHeight / 2;
+
+        // CLAMP to keep text fully visible
+        return Math.round(Math.max(0, Math.min(videoHeight - totalTextHeight, yPosition)));
     }
 
     /**
      * Get X position expression for FFmpeg (uses text_w for centering)
      */
     private getXPositionExpr(alignment: TextAlignment): string {
-        switch (alignment) {
-            case 'left': return 'x=w*0.05';
-            case 'center': return 'x=(w-text_w)/2';
-            case 'right': return 'x=w*0.95-text_w';
-        }
-    }
-
-    private getYPosition(position: TextPosition): string {
-        switch (position) {
-            case 'top': return 'y=h*0.15';
-            case 'middle': return 'y=(h-text_h)/2';
-            case 'bottom': return 'y=h*0.85-text_h';
-        }
-    }
-
-    private getXPosition(alignment: TextAlignment): string {
         switch (alignment) {
             case 'left': return 'x=w*0.05';
             case 'center': return 'x=(w-text_w)/2';

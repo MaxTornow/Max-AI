@@ -1,9 +1,9 @@
 import React from 'react';
-import type { TextOverlaySettings, TextPosition, TextAlignment } from '@services/tyler/types';
+import type { TextOverlaySettings, TextAlignment } from '@services/tyler/types';
 import FontPicker from './FontPicker';
 import FontSizeSlider from './FontSizeSlider';
 import ColorPicker from './ColorPicker';
-import PositionSelector from './PositionSelector';
+import YPositionSlider from './YPositionSlider';
 import AlignmentSelector from './AlignmentSelector';
 
 interface TextEditorProps {
@@ -55,10 +55,11 @@ const TextEditor: React.FC<TextEditorProps> = ({
                 disabled={disabled}
             />
 
-            <PositionSelector
-                selectedPosition={settings.position}
-                onChange={(position: TextPosition) => updateSettings({ position })}
+            <YPositionSlider
+                value={settings.yPositionPercent}
+                onChange={(yPositionPercent) => updateSettings({ yPositionPercent })}
                 disabled={disabled}
+                defaultValue={50}
             />
 
             <AlignmentSelector

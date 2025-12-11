@@ -3,9 +3,6 @@
  * Browser-based video text overlay with ffmpeg.wasm
  */
 
-/** Text overlay position zones */
-export type TextPosition = 'top' | 'middle' | 'bottom';
-
 /** Text alignment options */
 export type TextAlignment = 'left' | 'center' | 'right';
 
@@ -20,9 +17,9 @@ export interface FontOption {
 export interface TextOverlaySettings {
     text: string;
     fontName: string;
-    fontSize: number;       // 20-120 pixels
-    textColor: string;      // Hex: "#FFFFFF"
-    position: TextPosition;
+    fontSize: number;           // 20-120 pixels
+    textColor: string;          // Hex: "#FFFFFF"
+    yPositionPercent: number;   // 0-100, vertical position (0 = top edge at top)
     alignment: TextAlignment;
 }
 

@@ -6,17 +6,10 @@ interface ColorPickerProps {
     disabled?: boolean;
 }
 
-const PRESET_COLORS = [
-    '#FFFFFF', // White
-    '#000000', // Black
-    '#FF0000', // Red
-    '#00FF00', // Green
-    '#0000FF', // Blue
-    '#FFFF00', // Yellow
-    '#FF00FF', // Magenta
-    '#00FFFF', // Cyan
-];
-
+/**
+ * ColorPicker - Simple color input with hex text field
+ * Simplified version without preset color squares
+ */
 const ColorPicker: React.FC<ColorPickerProps> = ({
     selectedColor,
     onChange,
@@ -50,23 +43,6 @@ const ColorPicker: React.FC<ColorPickerProps> = ({
                     maxLength={7}
                     className="w-24 px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white font-mono focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 />
-            </div>
-
-            <div className="mt-3 flex gap-2 flex-wrap">
-                {PRESET_COLORS.map((color) => (
-                    <button
-                        key={color}
-                        onClick={() => onChange(color)}
-                        disabled={disabled}
-                        className={`w-8 h-8 rounded border-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
-                            selectedColor === color
-                                ? 'border-primary-500 ring-2 ring-primary-300'
-                                : 'border-gray-300 dark:border-gray-600 hover:border-primary-400'
-                        }`}
-                        style={{ backgroundColor: color }}
-                        title={color}
-                    />
-                ))}
             </div>
         </div>
     );

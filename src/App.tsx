@@ -7,6 +7,10 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { StylesProvider } from './context/StylesContext';
 import { ToastProvider } from './context/ToastContext';
+import { ExportProvider } from './context/ExportContext';
+
+// Global Components
+import { GlobalExportProgress } from './components/tyler';
 
 // Layouts
 import MainLayout from './components/layouts/MainLayout';
@@ -113,7 +117,10 @@ const App: React.FC = () => {
         <AuthProvider>
           <StylesProvider>
             <ToastProvider>
-              <AppContent />
+              <ExportProvider>
+                <AppContent />
+                <GlobalExportProgress />
+              </ExportProvider>
             </ToastProvider>
           </StylesProvider>
         </AuthProvider>

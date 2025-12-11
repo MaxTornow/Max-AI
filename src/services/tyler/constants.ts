@@ -27,7 +27,7 @@ export const DEFAULT_SETTINGS: TextOverlaySettings = {
     fontName: 'Montserrat',
     fontSize: DEFAULT_FONT_SIZE,
     textColor: '#FFFFFF',
-    position: 'bottom',
+    yPositionPercent: 50,  // Middle (0 = top, 100 = bottom)
     alignment: 'center',
 };
 
