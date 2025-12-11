@@ -6,7 +6,7 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import TabNav, { BettyTab } from '../TabNav';
+import TabNav, { VinceTab } from '../TabNav';
 
 describe('TabNav Component', () => {
   const mockOnTabChange = jest.fn();

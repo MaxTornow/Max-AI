@@ -7,7 +7,7 @@ import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import TemplateSelector from '../TemplateSelector';
-import { BETTY_TEMPLATES, getDefaultTemplate } from '@services/betty/templates';
+import { VINCE_TEMPLATES, getDefaultTemplate } from '@services/vince/templates';
 
 describe('TemplateSelector Component', () => {
   const mockOnSelectTemplate = jest.fn();
@@ -25,7 +25,7 @@ describe('TemplateSelector Component', () => {
       />
     );
 
-    BETTY_TEMPLATES.forEach((template) => {
+    VINCE_TEMPLATES.forEach((template) => {
       expect(screen.getByText(template.name)).toBeInTheDocument();
     });
   });
@@ -38,7 +38,7 @@ describe('TemplateSelector Component', () => {
       />
     );
 
-    BETTY_TEMPLATES.forEach((template) => {
+    VINCE_TEMPLATES.forEach((template) => {
       expect(screen.getByText(template.description)).toBeInTheDocument();
     });
   });
@@ -64,7 +64,7 @@ describe('TemplateSelector Component', () => {
       />
     );
 
-    const cleanProfessional = BETTY_TEMPLATES.find(t => t.key === 'clean-professional')!;
+    const cleanProfessional = VINCE_TEMPLATES.find(t => t.key === 'clean-professional')!;
     fireEvent.click(screen.getByText(cleanProfessional.name));
 
     expect(mockOnSelectTemplate).toHaveBeenCalledWith(cleanProfessional);
@@ -79,7 +79,7 @@ describe('TemplateSelector Component', () => {
       />
     );
 
-    const cleanProfessional = BETTY_TEMPLATES.find(t => t.key === 'clean-professional')!;
+    const cleanProfessional = VINCE_TEMPLATES.find(t => t.key === 'clean-professional')!;
     fireEvent.click(screen.getByText(cleanProfessional.name));
 
     expect(mockOnSelectTemplate).not.toHaveBeenCalled();
@@ -122,7 +122,7 @@ describe('TemplateSelector Component', () => {
       />
     );
 
-    const newTemplate = BETTY_TEMPLATES.find(t => t.key === 'mrbeast-vibes')!;
+    const newTemplate = VINCE_TEMPLATES.find(t => t.key === 'mrbeast-vibes')!;
 
     rerender(
       <TemplateSelector

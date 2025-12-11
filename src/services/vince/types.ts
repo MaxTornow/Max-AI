@@ -6,6 +6,17 @@
 /** Submagic processing status values */
 export type SubmagicStatus = 'pending' | 'processing' | 'completed' | 'failed';
 
+/** Silence removal pace options */
+export type SilencePace = 'off' | 'natural' | 'fast' | 'extra-fast';
+
+/** Silence pace options for UI dropdown */
+export const SILENCE_PACE_OPTIONS = [
+  { value: 'off', label: 'Off' },
+  { value: 'natural', label: 'Natural' },
+  { value: 'fast', label: 'Fast' },
+  { value: 'extra-fast', label: 'Extra Fast' },
+] as const;
+
 /** Request body for POST /v1/projects */
 export interface SubmagicCreateProjectRequest {
   title: string;
@@ -17,6 +28,17 @@ export interface SubmagicCreateProjectRequest {
   magicZooms: boolean;
   magicBrolls: boolean;
   magicBrollsPercentage: number;  // 0-100
+  /** Silence removal pace: 'natural' | 'fast' | 'extra-fast' */
+  removeSilencePace?: 'natural' | 'fast' | 'extra-fast';
+  /** Remove filler words/bad takes (adds ~1-2 min processing time) */
+  removeBadTakes?: boolean;
+  /** Hook title: true = AI-generated, object = custom text */
+  hookTitle?: boolean | {
+    text: string;
+    template?: string;
+    top?: number;
+    size?: number;
+  };
 }
 
 /** Response from POST /v1/projects */
@@ -68,6 +90,14 @@ export interface Video {
   magic_zooms: boolean;
   magic_brolls: boolean;
   magic_brolls_percentage: number;
+  /** Silence removal pace: null (off), 'natural', 'fast', 'extra-fast' */
+  remove_silence_pace: string | null;
+  /** Remove filler words/bad takes */
+  remove_bad_takes: boolean;
+  /** Hook title enabled */
+  hook_title_enabled: boolean;
+  /** Custom hook title text (null = AI-generated) */
+  hook_title_text: string | null;
   error_message: string | null;
   retry_count: number;
   created_at: string;

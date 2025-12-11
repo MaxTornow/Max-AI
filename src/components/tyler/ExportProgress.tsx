@@ -1,5 +1,5 @@
-import React from 'react';
-import { FiLoader, FiCheckCircle, FiXCircle, FiDownload, FiRefreshCw } from 'react-icons/fi';
+import React, { useEffect, useState } from 'react';
+import { FiLoader, FiCheckCircle, FiXCircle, FiDownload, FiRefreshCw, FiAlertTriangle } from 'react-icons/fi';
 import type { FFmpegLoadState, ProcessingState } from '@services/tyler/types';
 
 interface ExportProgressProps {
@@ -15,6 +15,19 @@ const ExportProgress: React.FC<ExportProgressProps> = ({
     onDownload,
     onRetry,
 }) => {
+    const [isTabHidden, setIsTabHidden] = useState(false);
+
+    // Track tab visibility to warn user about potential processing pause
+    useEffect(() => {
+        const handleVisibilityChange = () => {
+            setIsTabHidden(document.hidden);
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
+    }, []);
     // Determine current state - only ONE should be active at a time
     const isError = ffmpegState.status === 'error' || processingState.status === 'error';
     const isCompleted = !isError && processingState.status === 'completed';
@@ -79,6 +92,11 @@ const ExportProgress: React.FC<ExportProgressProps> = ({
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
                         {processingState.progress}%
                     </p>
+                    {/* Tab visibility warning */}
+                    <div className="mt-4 flex items-center justify-center gap-2 text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-lg p-2">
+                        <FiAlertTriangle className="w-4 h-4 flex-shrink-0" />
+                        <span>Keep this tab open and visible for best results</span>
+                    </div>
                 </div>
             )}
 

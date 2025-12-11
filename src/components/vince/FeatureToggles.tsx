@@ -1,6 +1,6 @@
 import React from 'react';
-import { FiZoomIn, FiImage, FiGlobe } from 'react-icons/fi';
-import { SUPPORTED_LANGUAGES } from '@services/vince/types';
+import { FiZoomIn, FiImage, FiGlobe, FiClock, FiFilter, FiType } from 'react-icons/fi';
+import { SUPPORTED_LANGUAGES, SILENCE_PACE_OPTIONS, SilencePace } from '@services/vince/types';
 
 interface FeatureTogglesProps {
   magicZooms: boolean;
@@ -12,6 +12,15 @@ interface FeatureTogglesProps {
   onMagicBrollsPercentageChange: (value: number) => void;
   onLanguageChange: (value: string) => void;
   disabled?: boolean;
+  // New enhancement props
+  removeSilencePace: SilencePace;
+  removeBadTakes: boolean;
+  hookTitleEnabled: boolean;
+  hookTitleText: string;
+  onRemoveSilencePaceChange: (value: SilencePace) => void;
+  onRemoveBadTakesChange: (value: boolean) => void;
+  onHookTitleEnabledChange: (value: boolean) => void;
+  onHookTitleTextChange: (value: string) => void;
 }
 
 /**
@@ -27,6 +36,15 @@ const FeatureToggles: React.FC<FeatureTogglesProps> = ({
   onMagicBrollsPercentageChange,
   onLanguageChange,
   disabled = false,
+  // New enhancement props
+  removeSilencePace,
+  removeBadTakes,
+  hookTitleEnabled,
+  hookTitleText,
+  onRemoveSilencePaceChange,
+  onRemoveBadTakesChange,
+  onHookTitleEnabledChange,
+  onHookTitleTextChange,
 }) => {
   return (
     <div className="w-full space-y-4">
@@ -118,6 +136,111 @@ const FeatureToggles: React.FC<FeatureTogglesProps> = ({
           </div>
         </div>
       )}
+
+      {/* Remove Silence Dropdown */}
+      <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-orange-100 dark:bg-orange-900/40 flex items-center justify-center">
+              <FiClock className="w-5 h-5 text-orange-600 dark:text-orange-400" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-900 dark:text-white">
+                Remove Silence
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Cut dead air and pauses
+              </p>
+            </div>
+          </div>
+          <select
+            value={removeSilencePace}
+            onChange={(e) => onRemoveSilencePaceChange(e.target.value as SilencePace)}
+            disabled={disabled}
+            className="px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {SILENCE_PACE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Remove Filler Words Toggle - WITH WARNING */}
+      <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg space-y-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-red-100 dark:bg-red-900/40 flex items-center justify-center">
+              <FiFilter className="w-5 h-5 text-red-600 dark:text-red-400" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-900 dark:text-white">
+                Remove Filler Words
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Removes ums, uhs, hesitations
+              </p>
+            </div>
+          </div>
+          <label className="relative inline-flex items-center cursor-pointer">
+            <input
+              type="checkbox"
+              checked={removeBadTakes}
+              onChange={(e) => onRemoveBadTakesChange(e.target.checked)}
+              disabled={disabled}
+              className="sr-only peer"
+            />
+            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 dark:peer-focus:ring-primary-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-primary-600 peer-disabled:opacity-50 peer-disabled:cursor-not-allowed" />
+          </label>
+        </div>
+        {removeBadTakes && (
+          <p className="text-xs text-amber-600 dark:text-amber-400 ml-13 pl-13">
+            ⚠️ Adds ~1-2 minutes to processing time
+          </p>
+        )}
+      </div>
+
+      {/* Hook Title Toggle */}
+      <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-yellow-100 dark:bg-yellow-900/40 flex items-center justify-center">
+              <FiType className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-900 dark:text-white">
+                Hook Title
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Add animated intro caption
+              </p>
+            </div>
+          </div>
+          <label className="relative inline-flex items-center cursor-pointer">
+            <input
+              type="checkbox"
+              checked={hookTitleEnabled}
+              onChange={(e) => onHookTitleEnabledChange(e.target.checked)}
+              disabled={disabled}
+              className="sr-only peer"
+            />
+            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 dark:peer-focus:ring-primary-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-primary-600 peer-disabled:opacity-50 peer-disabled:cursor-not-allowed" />
+          </label>
+        </div>
+        {hookTitleEnabled && (
+          <input
+            type="text"
+            value={hookTitleText}
+            onChange={(e) => onHookTitleTextChange(e.target.value)}
+            placeholder="Custom text (leave empty for AI-generated)"
+            disabled={disabled}
+            maxLength={100}
+            className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          />
+        )}
+      </div>
 
       {/* Language Selector */}
       <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">

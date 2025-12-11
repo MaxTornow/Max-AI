@@ -357,6 +357,10 @@ export const processVideo = async (
     magicZooms: boolean;
     magicBrolls: boolean;
     magicBrollsPercentage: number;
+    // New enhancement options
+    removeSilencePace?: 'natural' | 'fast' | 'extra-fast';
+    removeBadTakes?: boolean;
+    hookTitle?: boolean | { text: string };
   }
 ): Promise<string> => {
   console.log('Starting video processing:', videoId);
@@ -367,8 +371,8 @@ export const processVideo = async (
     processing_started_at: new Date().toISOString(),
   });
 
-  // Create Submagic project
-  const project = await createSubmagicProject({
+  // Build base request
+  const request: SubmagicCreateProjectRequest = {
     title: options.title,
     videoUrl: signedUrl,
     templateName: options.templateName,
@@ -376,7 +380,21 @@ export const processVideo = async (
     magicZooms: options.magicZooms,
     magicBrolls: options.magicBrolls,
     magicBrollsPercentage: options.magicBrollsPercentage,
-  });
+  };
+
+  // Add optional enhancement parameters only if they have values
+  if (options.removeSilencePace) {
+    request.removeSilencePace = options.removeSilencePace;
+  }
+  if (options.removeBadTakes) {
+    request.removeBadTakes = options.removeBadTakes;
+  }
+  if (options.hookTitle) {
+    request.hookTitle = options.hookTitle;
+  }
+
+  // Create Submagic project
+  const project = await createSubmagicProject(request);
 
   // Update with project ID
   await updateVideoRecord(videoId, {

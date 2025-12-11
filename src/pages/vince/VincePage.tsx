@@ -24,7 +24,7 @@ import {
   getVideoSignedUrl,
 } from '@services/vince';
 import { VINCE_TEMPLATES, getDefaultTemplate } from '@services/vince/templates';
-import type { Video, VinceTemplate, UploadState, ProcessingState } from '@services/vince/types';
+import type { Video, VinceTemplate, UploadState, ProcessingState, SilencePace } from '@services/vince/types';
 
 const POLL_INTERVAL = parseInt(import.meta.env.VITE_SUBMAGIC_POLL_INTERVAL_MS || '30000');
 
@@ -50,6 +50,12 @@ const VincePage: React.FC = () => {
     selectedTemplate.defaults.magicBrollsPercentage
   );
   const [language, setLanguage] = useState('en');
+
+  // New enhancement state
+  const [removeSilencePace, setRemoveSilencePace] = useState<SilencePace>('off');
+  const [removeBadTakes, setRemoveBadTakes] = useState(false);
+  const [hookTitleEnabled, setHookTitleEnabled] = useState(false);
+  const [hookTitleText, setHookTitleText] = useState('');
 
   // Upload/Processing state
   const [uploadState, setUploadState] = useState<UploadState>({ status: 'idle' });
@@ -216,6 +222,11 @@ const VincePage: React.FC = () => {
         magic_zooms: magicZooms,
         magic_brolls: magicBrolls,
         magic_brolls_percentage: magicBrollsPercentage,
+        // New enhancement fields
+        remove_silence_pace: removeSilencePace !== 'off' ? removeSilencePace : null,
+        remove_bad_takes: removeBadTakes,
+        hook_title_enabled: hookTitleEnabled,
+        hook_title_text: hookTitleText.trim() || null,
         error_message: null,
         retry_count: 0,
         processing_started_at: null,
@@ -234,6 +245,12 @@ const VincePage: React.FC = () => {
         magicZooms,
         magicBrolls,
         magicBrollsPercentage,
+        // New enhancement options - only pass if enabled/has value
+        removeSilencePace: removeSilencePace !== 'off' ? removeSilencePace : undefined,
+        removeBadTakes: removeBadTakes || undefined,
+        hookTitle: hookTitleEnabled
+          ? (hookTitleText.trim() ? { text: hookTitleText.trim() } : true)
+          : undefined,
       });
 
       setCurrentProjectId(projectId);
@@ -332,6 +349,12 @@ const VincePage: React.FC = () => {
     setMagicBrolls(getDefaultTemplate().defaults.magicBrolls);
     setMagicBrollsPercentage(getDefaultTemplate().defaults.magicBrollsPercentage);
     setLanguage('en');
+    // Reset new enhancement state
+    setRemoveSilencePace('off');
+    setRemoveBadTakes(false);
+    setHookTitleEnabled(false);
+    setHookTitleText('');
+    // Reset upload/processing state
     setUploadState({ status: 'idle' });
     setProcessingState({ status: 'idle' });
     setCurrentVideoId(null);
@@ -439,6 +462,15 @@ const VincePage: React.FC = () => {
                   onMagicBrollsPercentageChange={setMagicBrollsPercentage}
                   onLanguageChange={setLanguage}
                   disabled={isProcessing}
+                  // New enhancement props
+                  removeSilencePace={removeSilencePace}
+                  removeBadTakes={removeBadTakes}
+                  hookTitleEnabled={hookTitleEnabled}
+                  hookTitleText={hookTitleText}
+                  onRemoveSilencePaceChange={setRemoveSilencePace}
+                  onRemoveBadTakesChange={setRemoveBadTakes}
+                  onHookTitleEnabledChange={setHookTitleEnabled}
+                  onHookTitleTextChange={setHookTitleText}
                 />
               </div>
 

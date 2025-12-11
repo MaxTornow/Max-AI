@@ -7,7 +7,7 @@ import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import VideoLibrary from '../VideoLibrary';
-import type { Video } from '@services/betty/types';
+import type { Video } from '@services/vince/types';
 
 // Mock date-fns for VideoCard
 jest.mock('date-fns', () => ({
@@ -37,6 +37,10 @@ describe('VideoLibrary Component', () => {
     magic_zooms: true,
     magic_brolls: false,
     magic_brolls_percentage: 0,
+    remove_silence_pace: null,
+    remove_bad_takes: false,
+    hook_title_enabled: false,
+    hook_title_text: null,
     error_message: null,
     retry_count: 0,
     created_at: '2024-01-01T00:00:00Z',

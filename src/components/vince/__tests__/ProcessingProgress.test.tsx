@@ -7,7 +7,7 @@ import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import ProcessingProgress from '../ProcessingProgress';
-import type { ProcessingState } from '@services/betty/types';
+import type { ProcessingState } from '@services/vince/types';
 
 describe('ProcessingProgress Component', () => {
   const mockOnRetry = jest.fn();

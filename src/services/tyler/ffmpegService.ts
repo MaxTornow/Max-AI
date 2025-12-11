@@ -16,9 +16,40 @@ class FFmpegService {
     private ffmpeg: FFmpeg;
     private loaded = false;
     private fontsLoaded = false;
+    private wakeLock: WakeLockSentinel | null = null;
 
     constructor() {
         this.ffmpeg = new FFmpeg();
+    }
+
+    /**
+     * Request a screen wake lock to prevent browser throttling during export
+     * Falls back gracefully if not supported
+     */
+    private async requestWakeLock(): Promise<void> {
+        try {
+            if ('wakeLock' in navigator) {
+                this.wakeLock = await navigator.wakeLock.request('screen');
+                console.log('Wake lock acquired for video processing');
+            }
+        } catch (err) {
+            console.warn('Wake lock not available:', err);
+        }
+    }
+
+    /**
+     * Release the wake lock after processing
+     */
+    private async releaseWakeLock(): Promise<void> {
+        if (this.wakeLock) {
+            try {
+                await this.wakeLock.release();
+                this.wakeLock = null;
+                console.log('Wake lock released');
+            } catch (err) {
+                console.warn('Failed to release wake lock:', err);
+            }
+        }
     }
 
     async load(onProgress?: (progress: number) => void): Promise<void> {
@@ -78,63 +109,71 @@ class FFmpegService {
             throw new Error('FFmpeg not loaded. Call load() first.');
         }
 
-        // Set up progress listener
-        this.ffmpeg.on('progress', ({ progress }) => {
-            onProgress?.(Math.round(progress * 100));
-        });
+        // Request wake lock to prevent browser throttling when tab is backgrounded
+        await this.requestWakeLock();
 
-        await this.loadFonts();
+        try {
+            // Set up progress listener
+            this.ffmpeg.on('progress', ({ progress }) => {
+                onProgress?.(Math.round(progress * 100));
+            });
 
-        // Write input video to virtual filesystem
-        const inputName = 'input.mp4';
-        const outputName = 'output.mp4';
-        await this.ffmpeg.writeFile(inputName, await fetchFile(videoFile));
+            await this.loadFonts();
 
-        // Build drawtext filter for each line
-        const fontFilePath = FONTS.find(f => f.name === settings.fontName)?.file || FONTS[0].file;
-        const fontFile = fontFilePath.split('/').pop() || fontFilePath;
-        const fontColor = settings.textColor.replace('#', '');
+            // Write input video to virtual filesystem
+            const inputName = 'input.mp4';
+            const outputName = 'output.mp4';
+            await this.ffmpeg.writeFile(inputName, await fetchFile(videoFile));
 
-        // Split text into lines and create a drawtext filter for each
-        const lines = settings.text.split('\n').filter(line => line.trim());
-        const lineHeight = settings.fontSize * 1.3; // Line spacing
-        const totalTextHeight = lines.length * lineHeight;
+            // Build drawtext filter for each line
+            const fontFilePath = FONTS.find(f => f.name === settings.fontName)?.file || FONTS[0].file;
+            const fontFile = fontFilePath.split('/').pop() || fontFilePath;
+            const fontColor = settings.textColor.replace('#', '');
 
-        // Calculate base Y position for the text block
-        const baseY = this.getBaseYPosition(settings.position, videoHeight, totalTextHeight);
+            // Split text into lines and create a drawtext filter for each
+            const lines = settings.text.split('\n').filter(line => line.trim());
+            const lineHeight = settings.fontSize * 1.3; // Line spacing
+            const totalTextHeight = lines.length * lineHeight;
 
-        // Build filter chain with one drawtext per line
-        const drawtextFilters = lines.map((line, index) => {
-            const escapedLine = this.escapeForDrawtext(line);
-            const lineY = Math.round(baseY + (index * lineHeight));
-            const xPos = this.getXPositionExpr(settings.alignment);
+            // Calculate base Y position for the text block
+            const baseY = this.getBaseYPosition(settings.position, videoHeight, totalTextHeight);
 
-            return `drawtext=text='${escapedLine}':fontfile=/fonts/${fontFile}:fontsize=${settings.fontSize}:fontcolor=${fontColor}:${xPos}:y=${lineY}:shadowcolor=black@0.7:shadowx=2:shadowy=2`;
-        });
+            // Build filter chain with one drawtext per line
+            const drawtextFilters = lines.map((line, index) => {
+                const escapedLine = this.escapeForDrawtext(line);
+                const lineY = Math.round(baseY + (index * lineHeight));
+                const xPos = this.getXPositionExpr(settings.alignment);
 
-        // Join all drawtext filters
-        const filterComplex = drawtextFilters.join(',');
+                return `drawtext=text='${escapedLine}':fontfile=/fonts/${fontFile}:fontsize=${settings.fontSize}:fontcolor=${fontColor}:${xPos}:y=${lineY}:shadowcolor=black@0.7:shadowx=2:shadowy=2`;
+            });
 
-        // Execute ffmpeg command
-        await this.ffmpeg.exec([
-            '-i', inputName,
-            '-vf', filterComplex,
-            '-c:v', 'libx264',
-            '-preset', 'fast',
-            '-crf', '23',
-            '-c:a', 'copy',
-            '-movflags', '+faststart',
-            outputName,
-        ]);
+            // Join all drawtext filters
+            const filterComplex = drawtextFilters.join(',');
 
-        // Read output file
-        const data = await this.ffmpeg.readFile(outputName);
+            // Execute ffmpeg command
+            await this.ffmpeg.exec([
+                '-i', inputName,
+                '-vf', filterComplex,
+                '-c:v', 'libx264',
+                '-preset', 'fast',
+                '-crf', '23',
+                '-c:a', 'copy',
+                '-movflags', '+faststart',
+                outputName,
+            ]);
 
-        // Clean up
-        await this.ffmpeg.deleteFile(inputName);
-        await this.ffmpeg.deleteFile(outputName);
+            // Read output file
+            const data = await this.ffmpeg.readFile(outputName);
 
-        return new Blob([data], { type: 'video/mp4' });
+            // Clean up
+            await this.ffmpeg.deleteFile(inputName);
+            await this.ffmpeg.deleteFile(outputName);
+
+            return new Blob([data], { type: 'video/mp4' });
+        } finally {
+            // Always release wake lock when done
+            await this.releaseWakeLock();
+        }
     }
 
     /**

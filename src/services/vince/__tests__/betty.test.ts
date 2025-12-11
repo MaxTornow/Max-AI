@@ -5,7 +5,7 @@
 
 import { describe, expect, test, beforeEach, jest } from '@jest/globals';
 import {
-  BETTY_TEMPLATES,
+  VINCE_TEMPLATES,
   getTemplateByKey,
   getTemplateBySubmagicName,
   getDefaultTemplate,
@@ -15,7 +15,7 @@ import {
   MAX_FILE_SIZE,
   SUPPORTED_LANGUAGES,
 } from '../types';
-import type { BettyTemplate, Video, SubmagicStatus } from '../types';
+import type { VinceTemplate, Video, SubmagicStatus } from '../types';
 
 // Mock Supabase client
 jest.mock('../../supabase/client', () => ({
@@ -38,13 +38,13 @@ jest.mock('../../supabase/client', () => ({
 }));
 
 describe('BETTY Templates', () => {
-  describe('BETTY_TEMPLATES array', () => {
+  describe('VINCE_TEMPLATES array', () => {
     test('should have exactly 8 templates', () => {
-      expect(BETTY_TEMPLATES).toHaveLength(8);
+      expect(VINCE_TEMPLATES).toHaveLength(8);
     });
 
     test('each template should have required properties', () => {
-      BETTY_TEMPLATES.forEach((template) => {
+      VINCE_TEMPLATES.forEach((template) => {
         expect(template).toHaveProperty('key');
         expect(template).toHaveProperty('name');
         expect(template).toHaveProperty('submagicTemplateName');
@@ -58,19 +58,19 @@ describe('BETTY Templates', () => {
     });
 
     test('each template key should be unique', () => {
-      const keys = BETTY_TEMPLATES.map((t) => t.key);
+      const keys = VINCE_TEMPLATES.map((t) => t.key);
       const uniqueKeys = new Set(keys);
       expect(uniqueKeys.size).toBe(keys.length);
     });
 
     test('each submagicTemplateName should be unique', () => {
-      const names = BETTY_TEMPLATES.map((t) => t.submagicTemplateName);
+      const names = VINCE_TEMPLATES.map((t) => t.submagicTemplateName);
       const uniqueNames = new Set(names);
       expect(uniqueNames.size).toBe(names.length);
     });
 
     test('magicBrollsPercentage should be between 0 and 100', () => {
-      BETTY_TEMPLATES.forEach((template) => {
+      VINCE_TEMPLATES.forEach((template) => {
         expect(template.defaults.magicBrollsPercentage).toBeGreaterThanOrEqual(0);
         expect(template.defaults.magicBrollsPercentage).toBeLessThanOrEqual(100);
       });
@@ -78,7 +78,7 @@ describe('BETTY Templates', () => {
 
     test('previewColor should be valid hex color', () => {
       const hexColorRegex = /^#[0-9A-Fa-f]{6}$/;
-      BETTY_TEMPLATES.forEach((template) => {
+      VINCE_TEMPLATES.forEach((template) => {
         expect(template.previewColor).toMatch(hexColorRegex);
       });
     });
@@ -137,7 +137,7 @@ describe('BETTY Templates', () => {
   describe('getDefaultTemplate', () => {
     test('should return first template as default', () => {
       const defaultTemplate = getDefaultTemplate();
-      expect(defaultTemplate).toBe(BETTY_TEMPLATES[0]);
+      expect(defaultTemplate).toBe(VINCE_TEMPLATES[0]);
     });
 
     test('default template should be Bold & Energetic', () => {
@@ -221,6 +221,11 @@ describe('Video Type Structure', () => {
       magic_zooms: true,
       magic_brolls: false,
       magic_brolls_percentage: 0,
+      // New enhancement fields
+      remove_silence_pace: null,
+      remove_bad_takes: false,
+      hook_title_enabled: false,
+      hook_title_text: null,
       error_message: null,
       retry_count: 0,
       created_at: '2024-01-01T00:00:00Z',
@@ -265,7 +270,7 @@ describe('Template Defaults', () => {
 
     // Verify it's the highest
     const maxPercentage = Math.max(
-      ...BETTY_TEMPLATES.map((t) => t.defaults.magicBrollsPercentage)
+      ...VINCE_TEMPLATES.map((t) => t.defaults.magicBrollsPercentage)
     );
     expect(template?.defaults.magicBrollsPercentage).toBe(maxPercentage);
   });
