@@ -60,6 +60,11 @@ class FFmpegService {
             onProgress?.(Math.round(progress * 100));
         });
 
+        // Log FFmpeg output for debugging
+        this.ffmpeg.on('log', ({ message }) => {
+            console.log('[FFmpeg]', message);
+        });
+
         // CRITICAL: Use toBlobURL to bypass CORS
         await this.ffmpeg.load({
             coreURL: await toBlobURL(`${BASE_URL}/ffmpeg-core.js`, 'text/javascript'),
@@ -150,8 +155,12 @@ class FFmpegService {
             // Join all drawtext filters
             const filterComplex = drawtextFilters.join(',');
 
+            // Log the filter for debugging
+            console.log('FFmpeg filter:', filterComplex);
+            console.log('Video dimensions:', videoWidth, 'x', videoHeight);
+
             // Execute ffmpeg command
-            await this.ffmpeg.exec([
+            const exitCode = await this.ffmpeg.exec([
                 '-i', inputName,
                 '-vf', filterComplex,
                 '-c:v', 'libx264',
@@ -162,8 +171,21 @@ class FFmpegService {
                 outputName,
             ]);
 
-            // Read output file
-            const data = await this.ffmpeg.readFile(outputName);
+            console.log('FFmpeg exit code:', exitCode);
+
+            // Check if output file exists and has content
+            let data: Uint8Array;
+            try {
+                data = await this.ffmpeg.readFile(outputName) as Uint8Array;
+                console.log('Output file size:', data.byteLength, 'bytes');
+
+                if (data.byteLength === 0) {
+                    throw new Error('FFmpeg produced an empty output file. Check the console for FFmpeg errors.');
+                }
+            } catch (readError) {
+                console.error('Failed to read output file:', readError);
+                throw new Error('FFmpeg failed to create output file. The video may be corrupted or unsupported.');
+            }
 
             // Clean up
             await this.ffmpeg.deleteFile(inputName);

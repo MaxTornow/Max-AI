@@ -19,7 +19,12 @@ const VideoPreview: React.FC<VideoPreviewProps> = ({
     // Track actual video dimensions and displayed dimensions for accurate scaling
     const [videoDimensions, setVideoDimensions] = useState<{ width: number; height: number } | null>(null);
     const [displayedSize, setDisplayedSize] = useState<{ width: number; height: number } | null>(null);
-    const [videoOffset, setVideoOffset] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+
+    // Calculate aspect ratio for dynamic container sizing (eliminates black bars)
+    const aspectRatio = videoDimensions
+        ? videoDimensions.width / videoDimensions.height
+        : 16 / 9; // Default to 16:9 until video loads
+    const isVertical = aspectRatio < 1;
 
     useEffect(() => {
         const video = videoRef.current;
@@ -36,40 +41,19 @@ const VideoPreview: React.FC<VideoPreviewProps> = ({
         };
     }, [onVideoLoad]);
 
-    // Track the actual rendered size and position of the video element
+    // Track the actual rendered size of the video element
+    // With dynamic container sizing, the video fills the container exactly (no letterboxing)
     useEffect(() => {
         const video = videoRef.current;
         if (!video || !videoDimensions) return;
 
         const updateDisplayedSize = () => {
-            const containerRect = video.parentElement?.getBoundingClientRect();
             const videoRect = video.getBoundingClientRect();
 
-            if (!containerRect || videoRect.width <= 0 || videoRect.height <= 0) return;
+            if (videoRect.width <= 0 || videoRect.height <= 0) return;
 
-            // Calculate the actual displayed video dimensions (accounting for object-contain)
-            const containerAspect = containerRect.width / containerRect.height;
-            const videoAspect = videoDimensions.width / videoDimensions.height;
-
-            let displayWidth: number;
-            let displayHeight: number;
-            let offsetTop = 0;
-            let offsetLeft = 0;
-
-            if (videoAspect > containerAspect) {
-                // Video is wider - fits to width, letterboxed top/bottom
-                displayWidth = containerRect.width;
-                displayHeight = containerRect.width / videoAspect;
-                offsetTop = (containerRect.height - displayHeight) / 2;
-            } else {
-                // Video is taller - fits to height, pillarboxed left/right
-                displayHeight = containerRect.height;
-                displayWidth = containerRect.height * videoAspect;
-                offsetLeft = (containerRect.width - displayWidth) / 2;
-            }
-
-            setDisplayedSize({ width: displayWidth, height: displayHeight });
-            setVideoOffset({ top: offsetTop, left: offsetLeft });
+            // Video now fills container exactly (no letterboxing/pillarboxing)
+            setDisplayedSize({ width: videoRect.width, height: videoRect.height });
         };
 
         const resizeObserver = new ResizeObserver(updateDisplayedSize);
@@ -130,12 +114,31 @@ const VideoPreview: React.FC<VideoPreviewProps> = ({
     const xStyles = getXStyles();
     const scaledShadow = Math.max(1, scaledFontSize * 0.04);
 
+    // Container styles: for vertical videos, constrain width and center; for horizontal, use full width
+    const containerStyle: React.CSSProperties = isVertical
+        ? {
+              // Vertical video: constrain to max height, width determined by aspect ratio
+              maxHeight: '600px',
+              width: 'auto',
+              aspectRatio: `${aspectRatio}`,
+              margin: '0 auto', // Center horizontally
+          }
+        : {
+              // Horizontal video: full width, height determined by aspect ratio
+              width: '100%',
+              maxHeight: '600px',
+          };
+
     return (
-        <div className="relative w-full bg-black rounded-lg overflow-hidden">
+        <div
+            className="relative rounded-lg overflow-hidden"
+            style={containerStyle}
+        >
             <video
                 ref={videoRef}
                 src={videoUrl}
-                className="w-full h-auto max-h-[600px] object-contain"
+                className="w-full h-full object-cover"
+                style={isVertical ? { maxHeight: '600px' } : {}}
                 controls
                 playsInline
                 muted
@@ -144,11 +147,8 @@ const VideoPreview: React.FC<VideoPreviewProps> = ({
             {settings.text && displayedSize && (
                 <div
                     ref={textOverlayRef}
-                    className="absolute pointer-events-none"
+                    className="absolute pointer-events-none inset-0"
                     style={{
-                        // Position the overlay exactly over the video content
-                        top: videoOffset.top,
-                        left: videoOffset.left,
                         width: displayedSize.width,
                         height: displayedSize.height,
                     }}
