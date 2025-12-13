@@ -34,6 +34,7 @@ import LacyChat from './pages/lacy/LacyChat';
 import FranckChat from './pages/franck/FranckChat';
 import FarisChat from './pages/faris/FarisChat';
 import AIMaxChat from './pages/aiMax/AIMaxChat';
+import SageChat from './pages/sage/SageChat';
 import CreateRewrite from './pages/vera/CreateRewrite';
 import MyStyles from './pages/styles/MyStyles';
 import AllRewrites from './pages/rewrites/AllRewrites';
@@ -92,6 +93,7 @@ const AppContent: React.FC = () => {
           <Route path="lacy" element={<LacyChat />} />
           <Route path="franck" element={<FranckChat />} />
           <Route path="faris" element={<FarisChat />} />
+          <Route path="sage" element={<SageChat />} />
           <Route path="create-rewrite" element={<CreateRewrite />} />
           <Route path="my-styles" element={<MyStyles />} />
           <Route path="all-rewrites" element={<AllRewrites />} />

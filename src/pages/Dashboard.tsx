@@ -55,6 +55,13 @@ const Dashboard: React.FC = () => {
       color: 'bg-teal-50 dark:bg-teal-900/20',
     },
     {
+      title: 'SAGE',
+      description: 'Script Analysis & Grading Engine - Analyze and improve your video scripts for maximum virality',
+      icon: <FiMessageSquare size={24} className="text-emerald-600 dark:text-emerald-400" />,
+      path: '/sage',
+      color: 'bg-emerald-50 dark:bg-emerald-900/20',
+    },
+    {
       title: 'Create Rewrite (VERA)',
       description: 'Viral Enhanced Rewrite Automator - Analyze viral videos and create customized script variants',
       icon: <FiCopy size={24} className="text-amber-600 dark:text-amber-400" />,

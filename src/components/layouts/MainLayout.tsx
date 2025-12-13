@@ -52,6 +52,7 @@ const MainLayout: React.FC = () => {
     { path: '/lacy', label: 'LACY (LinkedIn Automated Content for You)', icon: <FiMessageSquare size={20} /> },
     { path: '/franck', label: 'FRANCK (Facebook Relevant Automated Niche Content Kreator)', icon: <FiMessageSquare size={20} /> },
     { path: '/faris', label: 'FARIS (Facebook Automated Rewriting Intelligent Scholar)', icon: <FiMessageSquare size={20} /> },
+    { path: '/sage', label: 'SAGE (Script Analysis & Grading Engine)', icon: <FiMessageSquare size={20} /> },
     { path: '/vince', label: 'VINCE (Vertical INstant Content Editor)', icon: <FiFilm size={20} /> },
     { path: '/tyler', label: 'TYLER (Text Overlay for Your Videos)', icon: <FiFilm size={20} /> },
     { path: '/my-styles', label: 'My Styles', icon: <FiList size={20} /> },
