@@ -46,6 +46,7 @@ const MainLayout: React.FC = () => {
   const navItems = [
     { path: '/', label: 'Dashboard', icon: <FiHome size={20} /> },
     { path: '/ava', label: 'AVA (Advanced Viral Automator)', icon: <FiMessageSquare size={20} /> },
+    { path: '/aimax', label: 'AI MAX (VGA Course Coach)', icon: <FiMessageSquare size={20} /> },
     { path: '/create-rewrite', label: 'VERA (Viral Enhanced Rewrite Automator)', icon: <FiCopy size={20} /> },
     { path: '/lara', label: 'LARA (LinkedIn Automated Rewriting Assistant)', icon: <FiMessageSquare size={20} /> },
     { path: '/lacy', label: 'LACY (LinkedIn Automated Content for You)', icon: <FiMessageSquare size={20} /> },

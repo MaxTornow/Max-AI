@@ -17,3 +17,13 @@ dist
 .claude
 betty-ready
 PRPs
+CLAUDE.md 
+
+# CSV
+*.csv
+
+# References
+references
+
+# Vector Store
+ingestion

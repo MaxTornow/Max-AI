@@ -13,6 +13,13 @@ const Dashboard: React.FC = () => {
   // Feature cards for the dashboard
   const features = [
     {
+      title: 'AI Max Chat',
+      description: 'Max Tornow VGA Course Coach - Get personalized guidance on viral content creation',
+      icon: <FiMessageSquare size={24} className="text-orange-600 dark:text-orange-400" />,
+      path: '/aimax',
+      color: 'bg-orange-50 dark:bg-orange-900/20',
+    },
+    {
       title: 'AVA Chat',
       description: 'Advanced Viral Automator - Conversational AI for content ideation and script generation',
       icon: <FiMessageSquare size={24} className="text-primary-600 dark:text-primary-400" />,

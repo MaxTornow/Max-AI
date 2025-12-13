@@ -33,6 +33,7 @@ import LaraChat from './pages/lara/LaraChat';
 import LacyChat from './pages/lacy/LacyChat';
 import FranckChat from './pages/franck/FranckChat';
 import FarisChat from './pages/faris/FarisChat';
+import AIMaxChat from './pages/aiMax/AIMaxChat';
 import CreateRewrite from './pages/vera/CreateRewrite';
 import MyStyles from './pages/styles/MyStyles';
 import AllRewrites from './pages/rewrites/AllRewrites';
@@ -86,6 +87,7 @@ const AppContent: React.FC = () => {
         <Route path="/" element={<MainLayout />}>
           <Route index element={<Dashboard />} />
           <Route path="ava" element={<AvaChat />} />
+          <Route path="aimax" element={<AIMaxChat />} />
           <Route path="lara" element={<LaraChat />} />
           <Route path="lacy" element={<LacyChat />} />
           <Route path="franck" element={<FranckChat />} />
