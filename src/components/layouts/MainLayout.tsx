@@ -15,7 +15,9 @@ import {
   FiMoon,
   FiSun,
   FiUser,
-  FiFilm
+  FiFilm,
+  FiAward,
+  FiCheckCircle
 } from 'react-icons/fi';
 
 /**
@@ -46,13 +48,13 @@ const MainLayout: React.FC = () => {
   const navItems = [
     { path: '/', label: 'Dashboard', icon: <FiHome size={20} /> },
     { path: '/ava', label: 'AVA (Advanced Viral Automator)', icon: <FiMessageSquare size={20} /> },
-    { path: '/aimax', label: 'AI MAX (VGA Course Coach)', icon: <FiMessageSquare size={20} /> },
+    { path: '/aimax', label: 'AI MAX (VGA Course Coach)', icon: <FiAward size={20} /> },
     { path: '/create-rewrite', label: 'VERA (Viral Enhanced Rewrite Automator)', icon: <FiCopy size={20} /> },
     { path: '/lara', label: 'LARA (LinkedIn Automated Rewriting Assistant)', icon: <FiMessageSquare size={20} /> },
     { path: '/lacy', label: 'LACY (LinkedIn Automated Content for You)', icon: <FiMessageSquare size={20} /> },
     { path: '/franck', label: 'FRANCK (Facebook Relevant Automated Niche Content Kreator)', icon: <FiMessageSquare size={20} /> },
     { path: '/faris', label: 'FARIS (Facebook Automated Rewriting Intelligent Scholar)', icon: <FiMessageSquare size={20} /> },
-    { path: '/sage', label: 'SAGE (Script Analysis & Grading Engine)', icon: <FiMessageSquare size={20} /> },
+    { path: '/sage', label: 'SAGE (Script Analysis & Grading Engine)', icon: <FiCheckCircle size={20} /> },
     { path: '/vince', label: 'VINCE (Vertical INstant Content Editor)', icon: <FiFilm size={20} /> },
     { path: '/tyler', label: 'TYLER (Text Overlay for Your Videos)', icon: <FiFilm size={20} /> },
     { path: '/my-styles', label: 'My Styles', icon: <FiList size={20} /> },

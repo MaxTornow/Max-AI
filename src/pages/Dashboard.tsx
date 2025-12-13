@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@context/AuthContext';
-import { FiMessageSquare, FiCopy, FiList } from 'react-icons/fi';
+import { FiMessageSquare, FiCopy, FiList, FiAward, FiCheckCircle } from 'react-icons/fi';
 
 /**
  * Dashboard page component
@@ -15,7 +15,7 @@ const Dashboard: React.FC = () => {
     {
       title: 'AI Max Chat',
       description: 'Max Tornow VGA Course Coach - Get personalized guidance on viral content creation',
-      icon: <FiMessageSquare size={24} className="text-orange-600 dark:text-orange-400" />,
+      icon: <FiAward size={24} className="text-orange-600 dark:text-orange-400" />,
       path: '/aimax',
       color: 'bg-orange-50 dark:bg-orange-900/20',
     },
@@ -57,7 +57,7 @@ const Dashboard: React.FC = () => {
     {
       title: 'SAGE',
       description: 'Script Analysis & Grading Engine - Analyze and improve your video scripts for maximum virality',
-      icon: <FiMessageSquare size={24} className="text-emerald-600 dark:text-emerald-400" />,
+      icon: <FiCheckCircle size={24} className="text-emerald-600 dark:text-emerald-400" />,
       path: '/sage',
       color: 'bg-emerald-50 dark:bg-emerald-900/20',
     },
