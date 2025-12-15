@@ -54,13 +54,13 @@ const GlobalExportProgress: React.FC = () => {
                 )}
             </div>
 
-            {/* Loading FFmpeg */}
+            {/* Loading/Preparing */}
             {isLoading && (
                 <div>
                     <div className="flex items-center gap-2 mb-2">
                         <FiLoader className="w-4 h-4 text-primary-500 animate-spin" />
                         <span className="text-xs text-gray-600 dark:text-gray-400">
-                            Loading FFmpeg...
+                            {state.phaseMessage || 'Preparing...'}
                         </span>
                     </div>
                     <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
@@ -81,7 +81,7 @@ const GlobalExportProgress: React.FC = () => {
                     <div className="flex items-center gap-2 mb-2">
                         <FiLoader className="w-4 h-4 text-primary-500 animate-spin" />
                         <span className="text-xs text-gray-600 dark:text-gray-400">
-                            Processing video...
+                            {state.phaseMessage || 'Processing video...'}
                         </span>
                     </div>
                     <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">

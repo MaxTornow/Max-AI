@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useRef, ReactNode } from 'react';
-import { ffmpegService } from '../services/tyler';
+import { canvasExportService, type CanvasExportProgress, type ExportPhase } from '../services/tyler/canvasExportService';
 import type { TextOverlaySettings } from '../services/tyler/types';
 
 interface ExportState {
@@ -10,6 +10,9 @@ interface ExportState {
     outputBlobUrl: string | null;
     error: string | null;
     videoFileName: string | null;
+    // Canvas export phase tracking
+    exportPhase: ExportPhase | null;
+    phaseMessage: string | null;
 }
 
 interface ExportContextType {
@@ -29,6 +32,8 @@ const initialState: ExportState = {
     outputBlobUrl: null,
     error: null,
     videoFileName: null,
+    exportPhase: null,
+    phaseMessage: null,
 };
 
 const ExportContext = createContext<ExportContextType | undefined>(undefined);
@@ -56,6 +61,16 @@ export const ExportProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             return;
         }
 
+        // Check if canvas export is supported
+        if (!canvasExportService.isSupported()) {
+            setState(prev => ({
+                ...prev,
+                status: 'error',
+                error: 'Your browser does not support canvas video recording. Please use Chrome, Edge, or Firefox.',
+            }));
+            return;
+        }
+
         // Clean up previous blob URL
         if (blobUrlRef.current) {
             URL.revokeObjectURL(blobUrlRef.current);
@@ -67,35 +82,53 @@ export const ExportProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             ...initialState,
             status: 'loading-ffmpeg',
             videoFileName: file.name,
+            exportPhase: 'initializing',
+            phaseMessage: 'Initializing...',
         });
 
         try {
-            // Load FFmpeg if needed
-            if (!ffmpegService.isLoaded()) {
-                await ffmpegService.load((progress) => {
-                    if (abortRef.current) return;
-                    setState(prev => ({ ...prev, ffmpegProgress: progress }));
-                });
-            }
-
-            if (abortRef.current) {
-                setState(prev => ({ ...prev, status: 'cancelled' }));
-                return;
-            }
-
-            setState(prev => ({ ...prev, status: 'processing', ffmpegProgress: 100 }));
-
-            // Process video
-            const outputBlob = await ffmpegService.processVideo(
-                file,
+            // Use canvas-based export for pixel-perfect text rendering
+            const outputBlob = await canvasExportService.exportVideo({
+                videoFile: file,
                 settings,
-                dimensions.width,
-                dimensions.height,
-                (progress) => {
+                videoWidth: dimensions.width,
+                videoHeight: dimensions.height,
+                onProgress: (progress: CanvasExportProgress) => {
                     if (abortRef.current) return;
-                    setState(prev => ({ ...prev, processingProgress: progress }));
-                }
-            );
+
+                    // Map phase to status
+                    const status = progress.phase === 'initializing' ? 'loading-ffmpeg' : 'processing';
+
+                    // Calculate overall progress based on phase
+                    let overallProgress = 0;
+                    switch (progress.phase) {
+                        case 'initializing':
+                            overallProgress = progress.progress * 0.1; // 0-10%
+                            break;
+                        case 'extracting-audio':
+                            overallProgress = 10 + progress.progress * 0.1; // 10-20%
+                            break;
+                        case 'recording':
+                            overallProgress = 20 + progress.progress * 0.6; // 20-80%
+                            break;
+                        case 'merging':
+                            overallProgress = 80 + progress.progress * 0.2; // 80-100%
+                            break;
+                        case 'completed':
+                            overallProgress = 100;
+                            break;
+                    }
+
+                    setState(prev => ({
+                        ...prev,
+                        status,
+                        ffmpegProgress: progress.phase === 'initializing' ? progress.progress : 100,
+                        processingProgress: Math.round(overallProgress),
+                        exportPhase: progress.phase,
+                        phaseMessage: progress.message,
+                    }));
+                },
+            });
 
             if (abortRef.current) {
                 setState(prev => ({ ...prev, status: 'cancelled' }));
@@ -111,6 +144,8 @@ export const ExportProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                 processingProgress: 100,
                 outputBlob,
                 outputBlobUrl: blobUrl,
+                exportPhase: 'completed',
+                phaseMessage: 'Export complete!',
             }));
 
         } catch (error) {
