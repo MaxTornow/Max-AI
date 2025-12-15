@@ -28,9 +28,15 @@ if (!import.meta.env) {
   import.meta.env = {};
 }
 
-// Set the API token
+// Set the API token from environment (no hardcoded fallback for security)
+const apiToken = process.env.VITE_FASTSAVER_API_TOKEN;
+if (!apiToken) {
+  console.error('ERROR: VITE_FASTSAVER_API_TOKEN not set in environment');
+  console.error('Please set it in your .env file before running this test');
+  process.exit(1);
+}
 // @ts-ignore
-import.meta.env.VITE_FASTSAVER_API_TOKEN = '5NyVIfAQAfByOWLzZVZboVz6';
+import.meta.env.VITE_FASTSAVER_API_TOKEN = apiToken;
 
 // Import the functions directly using relative path
 import { getInstagramVideoInfo, downloadInstagramVideo } from '../instagramService';

@@ -4,9 +4,7 @@
  */
 
 import { ScriptGenerationResponse, StoryDetails } from './types';
-
-// Claude API key from environment variables
-const CLAUDE_API_KEY = import.meta.env.VITE_CLAUDE_API_KEY || 'your-claude-api-key-placeholder';
+import { API_KEYS, CLAUDE_CONFIG } from './config';
 
 /**
  * Generates video scripts using Claude AI based on transcription and story details
@@ -27,15 +25,18 @@ export const generateScripts = async (
     console.log('Story details:', storyDetails);
     
     // Use provided API key or default to environment variable
-    const claudeApiKey = apiKey || CLAUDE_API_KEY;
-    
-    // Debug logging for API key (mask most of it for security)
-    if (claudeApiKey === 'your-claude-api-key-placeholder') {
-      console.error('[DEBUG] Claude API key is using the placeholder value. Environment variable may not be loaded.');
-    } else {
-      const maskedKey = claudeApiKey.substring(0, 10) + '...' + claudeApiKey.substring(claudeApiKey.length - 5);
-      console.log('[DEBUG] Using Claude API key:', maskedKey);
+    const claudeApiKey = apiKey || API_KEYS.CLAUDE;
+
+    // Validate API key is configured
+    if (!claudeApiKey) {
+      console.error('[DEBUG] Claude API key not configured');
+      throw new Error('Claude API key not configured. Set VITE_CLAUDE_API_KEY in .env');
     }
+
+    // Debug logging for API key (mask most of it for security)
+    const maskedKey = claudeApiKey.substring(0, 10) + '...' + claudeApiKey.substring(claudeApiKey.length - 5);
+    console.log('[DEBUG] Using Claude API key:', maskedKey);
+    console.log('[DEBUG] Using model:', CLAUDE_CONFIG.MODEL);
     
     const prompt = `## Role:
 You are a master content marketer specializing in video script creation. Your expertise lies in adapting existing content while maintaining its original structure and authenticity.
@@ -133,9 +134,9 @@ Provide the scripts in the following JSON format:
           'anthropic-version': '2023-06-01'
         },
         body: JSON.stringify({
-          model: 'claude-3-7-sonnet-20250219',
-          max_tokens: 4000,
-          temperature: 0.6,
+          model: CLAUDE_CONFIG.MODEL,
+          max_tokens: CLAUDE_CONFIG.MAX_TOKENS,
+          temperature: CLAUDE_CONFIG.TEMPERATURE,
           messages: [
             {
               role: 'user',

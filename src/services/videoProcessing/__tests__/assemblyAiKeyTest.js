@@ -3,8 +3,14 @@
  * This script makes a simple API call to check if the key is valid
  */
 
-// Get the API key from environment or use the fallback
-const ASSEMBLY_AI_API_KEY = process.env.VITE_ASSEMBLY_AI_API_KEY || '8430d0e7333846f296be6a868d3adb2a';
+// Get the API key from environment (no fallback for security)
+const ASSEMBLY_AI_API_KEY = process.env.VITE_ASSEMBLY_AI_API_KEY;
+
+if (!ASSEMBLY_AI_API_KEY) {
+  console.error('ERROR: VITE_ASSEMBLY_AI_API_KEY not set in environment');
+  console.error('Please set it in your .env file before running this test');
+  process.exit(1);
+}
 
 console.log('=== TESTING ASSEMBLY AI API KEY ===');
 console.log(`Using API key: ${ASSEMBLY_AI_API_KEY.substring(0, 5)}...${ASSEMBLY_AI_API_KEY.substring(ASSEMBLY_AI_API_KEY.length - 5)}`);

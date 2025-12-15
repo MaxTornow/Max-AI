@@ -5,8 +5,7 @@
 
 import { TranscriptionResponse } from './types';
 
-// AssemblyAI API key from environment variables
-const ASSEMBLY_AI_API_KEY = import.meta.env.VITE_ASSEMBLY_AI_API_KEY || '8430d0e7333846f296be6a868d3adb2a';
+import { API_KEYS } from './config';
 
 /**
  * Uploads a video file to AssemblyAI for processing
@@ -14,6 +13,11 @@ const ASSEMBLY_AI_API_KEY = import.meta.env.VITE_ASSEMBLY_AI_API_KEY || '8430d0e
  * @returns {Promise<string>} The upload URL
  */
 export const uploadVideoToAssemblyAI = async (videoData: ArrayBuffer): Promise<string> => {
+  // Validate API key is configured
+  if (!API_KEYS.ASSEMBLY_AI) {
+    throw new Error('AssemblyAI API key not configured. Set VITE_ASSEMBLY_AI_API_KEY in .env');
+  }
+
   try {
     console.log('Uploading video to AssemblyAI, size:', videoData.byteLength, 'bytes');
     
@@ -25,7 +29,7 @@ export const uploadVideoToAssemblyAI = async (videoData: ArrayBuffer): Promise<s
       const response = await fetch('https://api.assemblyai.com/v2/upload', {
         method: 'POST',
         headers: {
-          'Authorization': ASSEMBLY_AI_API_KEY,
+          'Authorization': API_KEYS.ASSEMBLY_AI,
           'Content-Type': 'application/octet-stream',
         },
         body: videoData,
@@ -135,7 +139,7 @@ export const submitTranscriptionRequest = async (audioUrl: string): Promise<stri
     const response = await fetch('https://api.assemblyai.com/v2/transcript', {
       method: 'POST',
       headers: {
-        'Authorization': ASSEMBLY_AI_API_KEY,
+        'Authorization': API_KEYS.ASSEMBLY_AI,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ audio_url: audioUrl }),
@@ -183,7 +187,7 @@ export const getTranscriptionStatus = async (transcriptionId: string): Promise<T
     const response = await fetch(`https://api.assemblyai.com/v2/transcript/${transcriptionId}`, {
       method: 'GET',
       headers: {
-        'Authorization': ASSEMBLY_AI_API_KEY,
+        'Authorization': API_KEYS.ASSEMBLY_AI,
       },
     });
 

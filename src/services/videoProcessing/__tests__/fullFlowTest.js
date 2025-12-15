@@ -5,8 +5,14 @@
 
 // Instagram URL to test
 const instagramUrl = 'https://www.instagram.com/p/DJ381YSAZVJ/';
-// API token from the code
-const apiToken = '5NyVIfAQAfByOWLzZVZboVz6';
+// API token from environment (no fallback for security)
+const apiToken = process.env.VITE_FASTSAVER_API_TOKEN;
+
+if (!apiToken) {
+  console.error('ERROR: VITE_FASTSAVER_API_TOKEN not set in environment');
+  console.error('Please set it in your .env file before running this test');
+  process.exit(1);
+}
 
 // Step 1: Get Instagram video info
 async function getInstagramVideoInfo(url) {

@@ -4,9 +4,41 @@
  */
 
 import { InstagramVideoInfo } from './types';
+import { API_KEYS } from './config';
 
-// FastSaver API token from environment variables
-const FASTSAVER_API_TOKEN = import.meta.env.VITE_FASTSAVER_API_TOKEN || '5NyVIfAQAfByOWLzZVZboVz6';
+/**
+ * Response type for new FastSaver API
+ */
+interface FastSaverResponse {
+  ok: boolean;
+  id: string;
+  source: string;
+  type: string;
+  download_url: string;
+  thumbnail_url: string;
+  width?: number;
+  height?: number;
+  duration?: number;
+  caption?: string;
+}
+
+/**
+ * Maps new FastSaver API response to existing InstagramVideoInfo type
+ * Preserves backward compatibility with existing code
+ */
+const mapFastSaverResponse = (response: FastSaverResponse): InstagramVideoInfo => ({
+  error: !response.ok,
+  hosting: response.source?.replace('.com', '') || 'unknown',
+  shortcode: response.id,
+  download_url: response.download_url,
+  thumbnail: response.thumbnail_url,
+  caption: response.caption || '',
+  // Include new fields (InstagramVideoInfo allows any via [key: string]: any)
+  type: response.type,
+  width: response.width,
+  height: response.height,
+  duration: response.duration,
+});
 
 /**
  * Fetches information about an Instagram video
@@ -15,13 +47,20 @@ const FASTSAVER_API_TOKEN = import.meta.env.VITE_FASTSAVER_API_TOKEN || '5NyVIfA
  */
 export const getInstagramVideoInfo = async (url: string): Promise<InstagramVideoInfo> => {
   console.log('[DEBUG] getInstagramVideoInfo - Starting with URL:', url);
+
+  // Validate API key is configured
+  if (!API_KEYS.FASTSAVER) {
+    console.error('[DEBUG] getInstagramVideoInfo - API key not configured');
+    throw new Error('FastSaver API key not configured. Set VITE_FASTSAVER_API_TOKEN in .env');
+  }
+
   try {
     console.log('[DEBUG] getInstagramVideoInfo - Fetching Instagram video info for:', url);
-    
-    // Using proxy to avoid CORS issues
-    const apiUrl = `/api/fastsaver/get-info?url=${encodeURIComponent(url)}&token=${FASTSAVER_API_TOKEN}`;
+
+    // NEW: Using /fetch endpoint, auth handled by proxy via X-Api-Key header
+    const apiUrl = `/api/fastsaver/fetch?url=${encodeURIComponent(url)}`;
     console.log('[DEBUG] getInstagramVideoInfo - API URL:', apiUrl);
-    
+
     console.log('[DEBUG] getInstagramVideoInfo - Making API request...');
     const response = await fetch(apiUrl, {
       method: 'GET',
@@ -32,26 +71,31 @@ export const getInstagramVideoInfo = async (url: string): Promise<InstagramVideo
 
     console.log('[DEBUG] getInstagramVideoInfo - Response status:', response.status, response.statusText);
     console.log('[DEBUG] getInstagramVideoInfo - Response headers:', JSON.stringify(Object.fromEntries([...response.headers])));
-    
+
     if (!response.ok) {
       throw new Error(`Failed to fetch Instagram video info: ${response.status} ${response.statusText}`);
     }
 
     console.log('[DEBUG] getInstagramVideoInfo - Parsing response JSON...');
-    const data = await response.json();
+    const data: FastSaverResponse = await response.json();
     console.log('[DEBUG] getInstagramVideoInfo - Response data:', JSON.stringify(data, null, 2));
-    
-    // Validate the response data
+
+    // NEW: Validate using 'ok' field instead of checking for 'error'
     console.log('[DEBUG] getInstagramVideoInfo - Validating response data...');
     console.log('[DEBUG] getInstagramVideoInfo - Has data:', !!data);
+    console.log('[DEBUG] getInstagramVideoInfo - ok field:', data?.ok);
     console.log('[DEBUG] getInstagramVideoInfo - Has download_url:', data && !!data.download_url);
-    
-    if (!data || !data.download_url) {
-      throw new Error('Invalid response from FastSaver API: Missing download URL');
+
+    if (!data || !data.ok || !data.download_url) {
+      throw new Error('Invalid response from FastSaver API: Missing download URL or request failed');
     }
-    
+
+    // Map to existing interface for backward compatibility
+    const mappedData = mapFastSaverResponse(data);
+    console.log('[DEBUG] getInstagramVideoInfo - Mapped data:', JSON.stringify(mappedData, null, 2));
     console.log('[DEBUG] getInstagramVideoInfo - Validation successful, returning data');
-    return data as InstagramVideoInfo;
+
+    return mappedData;
   } catch (error) {
     console.error('[DEBUG] getInstagramVideoInfo - Error:', error);
     if (error instanceof Error) {
@@ -75,17 +119,20 @@ export const downloadInstagramVideo = async (downloadUrl: string): Promise<Array
   console.log('[DEBUG] downloadInstagramVideo - Starting with URL:', downloadUrl.substring(0, 50) + '...');
   try {
     console.log('[DEBUG] downloadInstagramVideo - Downloading Instagram video from:', downloadUrl.substring(0, 50) + '...');
-    
+
+    // Route through proxy to avoid CORS issues with Instagram CDN
+    const proxyUrl = `/api/video-proxy?url=${encodeURIComponent(downloadUrl)}`;
+    console.log('[DEBUG] downloadInstagramVideo - Using proxy URL');
+
     console.log('[DEBUG] downloadInstagramVideo - Making download request...');
     const startTime = Date.now();
-    const response = await fetch(downloadUrl, {
+    const response = await fetch(proxyUrl, {
       method: 'GET',
     });
 
-    // Fixed: Corrected the debug log prefix from getInstagramVideoInfo to downloadInstagramVideo
     console.log('[DEBUG] downloadInstagramVideo - Response status:', response.status, response.statusText);
     console.log('[DEBUG] downloadInstagramVideo - Response headers:', JSON.stringify(Object.fromEntries([...response.headers])));
-    
+
     if (!response.ok) {
       const errorText = await response.text().catch(() => 'Could not read error response');
       console.error(`[DEBUG] downloadInstagramVideo - Failed with status ${response.status}: ${errorText}`);
@@ -94,34 +141,32 @@ export const downloadInstagramVideo = async (downloadUrl: string): Promise<Array
 
     console.log('[DEBUG] downloadInstagramVideo - Getting response as ArrayBuffer...');
     const videoData = await response.arrayBuffer();
-    
+
     // Validate video data
     if (!videoData || videoData.byteLength === 0) {
       console.error('[DEBUG] downloadInstagramVideo - Received empty video data');
       throw new Error('Received empty video data from Instagram');
     }
-    
+
     const downloadTime = Date.now() - startTime;
-    
+
     console.log('[DEBUG] downloadInstagramVideo - Download successful!');
     console.log('[DEBUG] downloadInstagramVideo - Video size:', (videoData.byteLength / 1024 / 1024).toFixed(2), 'MB');
     console.log('[DEBUG] downloadInstagramVideo - Download time:', downloadTime / 1000, 'seconds');
-    
+
     return videoData;
   } catch (error) {
-    // Create a structured error object with all available details
     const errorDetails = {
       message: error instanceof Error ? error.message : 'Unknown error',
       name: error instanceof Error ? error.name : 'Unknown',
       stack: error instanceof Error ? error.stack : undefined,
       type: error instanceof Error ? error.constructor.name : typeof error,
-      url: downloadUrl.substring(0, 50) + '...' // Only include part of the URL for privacy
+      url: downloadUrl.substring(0, 50) + '...'
     };
-    
+
     console.error('[DEBUG] downloadInstagramVideo - Error details:', JSON.stringify(errorDetails, null, 2));
     console.error('Error downloading Instagram video:', errorDetails);
-    
-    // Rethrow with original error to preserve stack trace
+
     if (error instanceof Error) {
       throw error;
     } else {

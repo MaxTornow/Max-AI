@@ -3,25 +3,25 @@
  * @module config
  */
 
-// Environment variables with fallbacks
+// Environment variables with fallbacks (SECURITY: No hardcoded keys)
 export const API_KEYS = {
-  FASTSAVER: import.meta.env.VITE_FASTSAVER_API_TOKEN || '5NyVIfAQAfByOWLzZVZboVz6',
-  TIKTOK: import.meta.env.VITE_TIKTOK_API_TOKEN || 'default_token',
-  ASSEMBLY_AI: import.meta.env.VITE_ASSEMBLY_AI_API_KEY || '8430d0e7333846f296be6a868d3adb2a',
-  CLAUDE: import.meta.env.VITE_CLAUDE_API_KEY || 'your-claude-api-key-placeholder'
+  FASTSAVER: import.meta.env.VITE_FASTSAVER_API_TOKEN || '',
+  TIKTOK: import.meta.env.VITE_TIKTOK_API_TOKEN || '',
+  ASSEMBLY_AI: import.meta.env.VITE_ASSEMBLY_AI_API_KEY || '',
+  CLAUDE: import.meta.env.VITE_CLAUDE_API_KEY || ''
 };
 
 // API Endpoints
 export const API_ENDPOINTS = {
-  FASTSAVER: 'https://fastsaverapi.com',
+  FASTSAVER: 'https://api.fastsaver.io/v1',
   TIKTOK: 'https://tiktok-video-no-watermark2.p.rapidapi.com/'
 };
 
 // FastSaver API configuration
 export const FASTSAVER_CONFIG = {
-  BASE_URL: 'https://fastsaverapi.com',
+  BASE_URL: 'https://api.fastsaver.io/v1',
   ENDPOINTS: {
-    GET_INFO: '/get-info'
+    FETCH: '/fetch'
   },
   TIMEOUT_MS: 15000,
   MAX_RETRIES: 3,
@@ -48,7 +48,7 @@ export const ASSEMBLY_AI_CONFIG = {
 
 // Claude AI configuration
 export const CLAUDE_CONFIG = {
-  MODEL: 'claude-3-opus-20240229',
+  MODEL: 'claude-sonnet-4-5-20250929',
   MAX_TOKENS: 8020,
   TEMPERATURE: 0.6,
   TIMEOUT_MS: 180000, // 3 minutes for script generation
