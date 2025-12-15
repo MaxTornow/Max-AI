@@ -8,6 +8,7 @@ import { ThemeProvider } from './context/ThemeContext';
 import { StylesProvider } from './context/StylesContext';
 import { ToastProvider } from './context/ToastContext';
 import { ExportProvider } from './context/ExportContext';
+import { VinceEditorProvider } from './context/VinceEditorContext';
 
 // Global Components
 import { GlobalExportProgress } from './components/tyler';
@@ -122,8 +123,10 @@ const App: React.FC = () => {
           <StylesProvider>
             <ToastProvider>
               <ExportProvider>
-                <AppContent />
-                <GlobalExportProgress />
+                <VinceEditorProvider>
+                  <AppContent />
+                  <GlobalExportProgress />
+                </VinceEditorProvider>
               </ExportProvider>
             </ToastProvider>
           </StylesProvider>

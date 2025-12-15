@@ -4,6 +4,7 @@ import { FiPlay, FiLoader } from 'react-icons/fi';
 
 import { useAuth } from '@context/AuthContext';
 import { useToast } from '@context/ToastContext';
+import { useVinceEditor } from '@context/VinceEditorContext';
 
 import TabNav, { VinceTab } from '@components/vince/TabNav';
 import VideoUploader from '@components/vince/VideoUploader';
@@ -27,6 +28,43 @@ import { VINCE_TEMPLATES, getDefaultTemplate } from '@services/vince/templates';
 import type { Video, VinceTemplate, UploadState, ProcessingState, SilencePace } from '@services/vince/types';
 
 const POLL_INTERVAL = parseInt(import.meta.env.VITE_SUBMAGIC_POLL_INTERVAL_MS || '30000');
+const VINCE_SETTINGS_KEY = 'vince_editor_settings';
+
+/** Vince editor settings that persist across page refreshes */
+interface VinceSettings {
+  templateKey: string;
+  magicZooms: boolean;
+  magicBrolls: boolean;
+  magicBrollsPercentage: number;
+  language: string;
+  removeSilencePace: SilencePace;
+  removeBadTakes: boolean;
+  hookTitleEnabled: boolean;
+  hookTitleText: string;
+}
+
+/** Load saved settings from localStorage */
+const loadSavedSettings = (): Partial<VinceSettings> => {
+  try {
+    const saved = localStorage.getItem(VINCE_SETTINGS_KEY);
+    if (saved) {
+      return JSON.parse(saved);
+    }
+  } catch (e) {
+    console.warn('Failed to load Vince settings from localStorage:', e);
+  }
+  return {};
+};
+
+/** Get initial template based on saved settings */
+const getInitialTemplate = (): VinceTemplate => {
+  const saved = loadSavedSettings();
+  if (saved.templateKey) {
+    const template = VINCE_TEMPLATES.find(t => t.key === saved.templateKey);
+    if (template) return template;
+  }
+  return getDefaultTemplate();
+};
 
 /**
  * VINCE Page - Vertical INstant Content Editor
@@ -37,35 +75,115 @@ const VincePage: React.FC = () => {
   const { showToast } = useToast();
   const queryClient = useQueryClient();
 
+  // Get editor state from context (persists across in-app navigation)
+  const {
+    editorState: {
+      selectedFile,
+      videoTitle,
+      hookTitleText,
+      uploadState,
+      processingState,
+      currentVideoId,
+      currentProjectId,
+    },
+    setSelectedFile,
+    setVideoTitle,
+    setHookTitleText,
+    setUploadState,
+    setProcessingState,
+    setCurrentVideoId,
+    setCurrentProjectId,
+    clearEditorState,
+  } = useVinceEditor();
+
   // Tab state
   const [activeTab, setActiveTab] = useState<VinceTab>('editor');
 
-  // Editor state
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [videoTitle, setVideoTitle] = useState('');
-  const [selectedTemplate, setSelectedTemplate] = useState<VinceTemplate>(getDefaultTemplate());
-  const [magicZooms, setMagicZooms] = useState(selectedTemplate.defaults.magicZooms);
-  const [magicBrolls, setMagicBrolls] = useState(selectedTemplate.defaults.magicBrolls);
-  const [magicBrollsPercentage, setMagicBrollsPercentage] = useState(
-    selectedTemplate.defaults.magicBrollsPercentage
+  // Load saved settings once on mount
+  const savedSettings = loadSavedSettings();
+  const initialTemplate = getInitialTemplate();
+
+  // Editor state - initialized from localStorage if available
+  const [selectedTemplate, setSelectedTemplate] = useState<VinceTemplate>(initialTemplate);
+  const [magicZooms, setMagicZooms] = useState(
+    savedSettings.magicZooms ?? initialTemplate.defaults.magicZooms
   );
-  const [language, setLanguage] = useState('en');
+  const [magicBrolls, setMagicBrolls] = useState(
+    savedSettings.magicBrolls ?? initialTemplate.defaults.magicBrolls
+  );
+  const [magicBrollsPercentage, setMagicBrollsPercentage] = useState(
+    savedSettings.magicBrollsPercentage ?? initialTemplate.defaults.magicBrollsPercentage
+  );
+  const [language, setLanguage] = useState(savedSettings.language ?? 'en');
 
-  // New enhancement state
-  const [removeSilencePace, setRemoveSilencePace] = useState<SilencePace>('off');
-  const [removeBadTakes, setRemoveBadTakes] = useState(false);
-  const [hookTitleEnabled, setHookTitleEnabled] = useState(false);
-  const [hookTitleText, setHookTitleText] = useState('');
+  // New enhancement state - initialized from localStorage if available
+  const [removeSilencePace, setRemoveSilencePace] = useState<SilencePace>(
+    savedSettings.removeSilencePace ?? 'off'
+  );
+  const [removeBadTakes, setRemoveBadTakes] = useState(savedSettings.removeBadTakes ?? false);
+  const [hookTitleEnabled, setHookTitleEnabled] = useState(savedSettings.hookTitleEnabled ?? false);
+  // hookTitleText comes from context (useVinceEditor) for in-app navigation persistence
+  // We sync it to localStorage for page refresh persistence in the useEffect below
 
-  // Upload/Processing state
-  const [uploadState, setUploadState] = useState<UploadState>({ status: 'idle' });
-  const [processingState, setProcessingState] = useState<ProcessingState>({ status: 'idle' });
-  const [currentVideoId, setCurrentVideoId] = useState<string | null>(null);
-  const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
+  // Initialize hookTitleText from localStorage on mount (for page refresh)
+  useEffect(() => {
+    if (savedSettings.hookTitleText && !hookTitleText) {
+      setHookTitleText(savedSettings.hookTitleText);
+    }
+  }, []); // Only run once on mount
+
+  // Upload/Processing state now comes from context (persists across navigation)
+  // See useVinceEditor() destructuring above
 
   // Library state
   const [downloadingVideoId, setDownloadingVideoId] = useState<string | null>(null);
   const [deletingVideoId, setDeletingVideoId] = useState<string | null>(null);
+
+  // Save settings to localStorage whenever they change
+  useEffect(() => {
+    const settings: VinceSettings = {
+      templateKey: selectedTemplate.key,
+      magicZooms,
+      magicBrolls,
+      magicBrollsPercentage,
+      language,
+      removeSilencePace,
+      removeBadTakes,
+      hookTitleEnabled,
+      hookTitleText,
+    };
+    try {
+      localStorage.setItem(VINCE_SETTINGS_KEY, JSON.stringify(settings));
+    } catch (e) {
+      console.warn('Failed to save Vince settings to localStorage:', e);
+    }
+  }, [
+    selectedTemplate,
+    magicZooms,
+    magicBrolls,
+    magicBrollsPercentage,
+    language,
+    removeSilencePace,
+    removeBadTakes,
+    hookTitleEnabled,
+    hookTitleText,
+  ]);
+
+  // Warn user before leaving page if they have an unuploaded video
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (selectedFile && processingState.status === 'idle') {
+        // Standard way to trigger browser's "Leave site?" dialog
+        e.preventDefault();
+        // Chrome requires returnValue to be set
+        e.returnValue = 'You have a video selected that hasn\'t been processed yet. If you leave, you\'ll need to re-upload it.';
+        return e.returnValue;
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [selectedFile, processingState.status]);
 
   // Fetch user's videos for library
   const {
@@ -80,6 +198,94 @@ const VincePage: React.FC = () => {
       staleTime: 30000,
     }
   );
+
+  // Track sync state to prevent duplicate syncs
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  // Function to sync processing videos with Submagic API
+  const syncProcessingVideos = useCallback(async () => {
+    if (isSyncing || !user?.id) return;
+
+    const processingVideos = videos.filter(
+      (v) => v.submagic_status === 'processing' && v.submagic_project_id
+    );
+
+    if (processingVideos.length === 0) return;
+
+    setIsSyncing(true);
+    console.log('Found', processingVideos.length, 'videos still processing, syncing status...');
+
+    // Take the most recent processing video to restore UI state
+    const mostRecentProcessing = processingVideos[0]; // Already sorted by created_at desc
+    let uiRestored = false;
+    let needsRefetch = false;
+
+    for (const video of processingVideos) {
+      try {
+        const status = await getSubmagicProjectStatus(video.submagic_project_id!);
+        console.log('Submagic status for', video.id, ':', status.status);
+
+        if (status.status === 'completed' && status.downloadUrl) {
+          // Video finished while we were away - update database
+          console.log('Video', video.id, 'completed, updating database');
+          const processedPath = await saveProcessedVideo(
+            status.downloadUrl,
+            user!.id,
+            video.original_filename
+          );
+          await updateVideoRecord(video.id, {
+            submagic_status: 'completed',
+            processed_storage_path: processedPath,
+            submagic_download_url: status.downloadUrl,
+            processing_completed_at: new Date().toISOString(),
+          });
+          needsRefetch = true;
+        } else if (status.status === 'failed') {
+          // Video failed while we were away
+          console.log('Video', video.id, 'failed, updating database');
+          await updateVideoRecord(video.id, {
+            submagic_status: 'failed',
+            error_message: status.errorMessage || 'Processing failed',
+          });
+          needsRefetch = true;
+        } else if (status.status === 'processing' && video.id === mostRecentProcessing.id && !uiRestored) {
+          // Video is still processing - restore the UI state to show progress bar
+          console.log('Restoring processing UI for video:', video.id);
+          setCurrentVideoId(video.id);
+          setCurrentProjectId(video.submagic_project_id!);
+          setProcessingState({
+            status: 'processing',
+            projectId: video.submagic_project_id!,
+            progress: 50 // Estimate mid-progress since we don't know exact state
+          });
+          setUploadState({ status: 'uploaded', videoId: video.id, storagePath: video.original_storage_path });
+          uiRestored = true;
+        }
+      } catch (error) {
+        console.error('Error syncing video status:', video.id, error);
+      }
+    }
+
+    // Refresh the video list to show updated statuses
+    if (needsRefetch) {
+      await refetchVideos();
+    }
+    setIsSyncing(false);
+  }, [videos, user?.id, isSyncing, refetchVideos, setCurrentVideoId, setCurrentProjectId, setProcessingState, setUploadState]);
+
+  // Sync processing videos on mount
+  useEffect(() => {
+    if (user?.id && videos.length > 0) {
+      syncProcessingVideos();
+    }
+  }, [videos.length, user?.id]); // Only run when video count changes or user changes
+
+  // Also sync when switching to Library tab
+  useEffect(() => {
+    if (activeTab === 'library' && videos.length > 0) {
+      syncProcessingVideos();
+    }
+  }, [activeTab]); // Run when tab changes
 
   // Poll for processing status when we have an active project
   const { data: projectStatus } = useQuery(
@@ -149,19 +355,20 @@ const VincePage: React.FC = () => {
         setCurrentProjectId(null);
       } else if (projectStatus.status === 'processing') {
         // Update progress (estimated based on time)
-        setProcessingState((prev) => {
-          if (prev.status === 'processing') {
-            // Slowly increment progress
-            const newProgress = Math.min(prev.progress + 5, 90);
-            return { ...prev, progress: newProgress };
-          }
-          return prev;
-        });
+        if (processingState.status === 'processing') {
+          // Slowly increment progress
+          const newProgress = Math.min(processingState.progress + 5, 90);
+          setProcessingState({
+            status: 'processing',
+            projectId: processingState.projectId,
+            progress: newProgress,
+          });
+        }
       }
     };
 
     handleStatusChange();
-  }, [projectStatus, currentVideoId, user, selectedFile, showToast, refetchVideos]);
+  }, [projectStatus, currentVideoId, user, selectedFile, showToast, refetchVideos, processingState, setProcessingState]);
 
   // Update feature toggles when template changes
   const handleTemplateChange = useCallback((template: VinceTemplate) => {
@@ -173,21 +380,17 @@ const VincePage: React.FC = () => {
 
   // Handle file selection
   const handleFileAccepted = useCallback((file: File) => {
-    setSelectedFile(file);
-    // Auto-fill title from filename
-    const titleFromFile = file.name.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ');
-    setVideoTitle(titleFromFile);
+    setSelectedFile(file); // Context auto-fills title from filename
     setUploadState({ status: 'idle' });
     setProcessingState({ status: 'idle' });
-  }, []);
+  }, [setSelectedFile]);
 
   // Handle file removal
   const handleFileRemoved = useCallback(() => {
     setSelectedFile(null);
-    setVideoTitle('');
     setUploadState({ status: 'idle' });
     setProcessingState({ status: 'idle' });
-  }, []);
+  }, [setSelectedFile]);
 
   // Process video
   const handleProcessVideo = async () => {
@@ -340,10 +543,20 @@ const VincePage: React.FC = () => {
     refetchVideos();
   };
 
-  // Reset editor state
+  // Handle retry after error - keeps file and settings, only resets upload/processing state
+  const handleRetry = useCallback(() => {
+    // Keep the file and all settings intact, just reset the upload/processing state
+    setUploadState({ status: 'idle' });
+    setProcessingState({ status: 'idle' });
+    setCurrentVideoId(null);
+    setCurrentProjectId(null);
+  }, []);
+
+  // Reset editor state (full reset for "Process Another Video")
   const resetEditor = () => {
-    setSelectedFile(null);
-    setVideoTitle('');
+    // Clear file and title from context
+    clearEditorState();
+    // Reset local state
     setSelectedTemplate(getDefaultTemplate());
     setMagicZooms(getDefaultTemplate().defaults.magicZooms);
     setMagicBrolls(getDefaultTemplate().defaults.magicBrolls);
@@ -395,7 +608,7 @@ const VincePage: React.FC = () => {
           {(processingState.status !== 'idle' || uploadState.status === 'uploading') && (
             <ProcessingProgress
               state={processingState}
-              onRetry={resetEditor}
+              onRetry={handleRetry}
               onViewLibrary={handleViewLibrary}
             />
           )}

@@ -299,7 +299,22 @@ const AIMaxChat: React.FC = () => {
               }`}
             >
               <div className="prose dark:prose-invert max-w-none">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    // Open all links in new tab
+                    a: ({ href, children }) => (
+                      <a
+                        href={href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary-600 dark:text-primary-400 hover:underline"
+                      >
+                        {children}
+                      </a>
+                    ),
+                  }}
+                >
                   {message.content}
                 </ReactMarkdown>
               </div>

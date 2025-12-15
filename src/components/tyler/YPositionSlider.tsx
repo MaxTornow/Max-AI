@@ -9,9 +9,9 @@ interface YPositionSliderProps {
 
 const GUIDE_MARKS = [
     { value: 0, label: 'Top' },
-    { value: 33, label: '33%' },
-    { value: 50, label: 'Mid' },
-    { value: 66, label: '66%' },
+    { value: 33, label: 'Top Third' },
+    { value: 50, label: 'Middle' },
+    { value: 66, label: 'Bottom Third' },
     { value: 100, label: 'Bottom' },
 ];
 

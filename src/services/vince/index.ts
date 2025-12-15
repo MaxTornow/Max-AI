@@ -80,6 +80,23 @@ export const getSubmagicProjectStatus = async (
 // ===== Supabase Storage Functions =====
 
 /**
+ * Get the correct MIME type for a video file based on extension.
+ * Browsers (especially Safari/iOS) sometimes report .MOV files as
+ * "application/octet-stream" instead of "video/quicktime", causing
+ * Supabase bucket validation to fail.
+ */
+const getVideoMimeType = (filename: string): string => {
+  const extension = filename.toLowerCase().split('.').pop();
+  const mimeTypes: Record<string, string> = {
+    'mp4': 'video/mp4',
+    'm4v': 'video/mp4',
+    'mov': 'video/quicktime',
+    'webm': 'video/webm',
+  };
+  return mimeTypes[extension || ''] || 'video/mp4';
+};
+
+/**
  * Upload video file to Supabase Storage
  */
 export const uploadVideoToStorage = async (
@@ -91,7 +108,9 @@ export const uploadVideoToStorage = async (
   const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
   const path = `${userId}/${timestamp}-${safeName}`;
 
-  console.log('Uploading video to storage:', path);
+  // Determine correct MIME type from extension (don't trust browser detection)
+  const contentType = getVideoMimeType(file.name);
+  console.log('Uploading video to storage:', path, 'contentType:', contentType);
 
   // Simulate progress for now (Supabase standard upload doesn't support progress)
   if (onProgress) {
@@ -103,6 +122,7 @@ export const uploadVideoToStorage = async (
     .upload(path, file, {
       cacheControl: '3600',
       upsert: false,
+      contentType, // Explicitly set MIME type to avoid browser detection issues
     });
 
   if (error) {

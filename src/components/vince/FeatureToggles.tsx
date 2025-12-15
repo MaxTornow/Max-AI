@@ -202,7 +202,7 @@ const FeatureToggles: React.FC<FeatureTogglesProps> = ({
         )}
       </div>
 
-      {/* Hook Title Toggle */}
+      {/* Headline Hook Toggle */}
       <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -211,7 +211,7 @@ const FeatureToggles: React.FC<FeatureTogglesProps> = ({
             </div>
             <div>
               <p className="text-sm font-medium text-gray-900 dark:text-white">
-                Hook Title
+                Headline Hook
               </p>
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 Add animated intro caption
