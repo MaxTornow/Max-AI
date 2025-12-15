@@ -3,8 +3,12 @@
  * Vertical INstant Content Editor
  */
 
-/** Submagic processing status values */
-export type SubmagicStatus = 'pending' | 'processing' | 'completed' | 'failed';
+/**
+ * Submagic processing status values
+ * API returns: processing, transcribing, exporting, completed, failed
+ * We also use 'pending' locally before sending to Submagic
+ */
+export type SubmagicStatus = 'pending' | 'processing' | 'transcribing' | 'exporting' | 'completed' | 'failed';
 
 /** Silence removal pace options */
 export type SilencePace = 'off' | 'natural' | 'fast' | 'extra-fast';
@@ -56,6 +60,7 @@ export interface SubmagicProjectResponse {
   language: string;
   templateName: string;
   downloadUrl?: string;  // Present when status = "completed" (expires in hours)
+  directUrl?: string;    // Alternative download URL (CloudFront direct link)
   transcript?: SubmagicTranscript;
   errorMessage?: string;  // Present when status = "failed"
   createdAt: string;

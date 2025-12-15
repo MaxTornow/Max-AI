@@ -262,7 +262,7 @@ export type Database = {
           original_storage_path: string;
           processed_storage_path: string | null;
           submagic_project_id: string | null;
-          submagic_status: 'pending' | 'processing' | 'completed' | 'failed';
+          submagic_status: 'pending' | 'processing' | 'transcribing' | 'exporting' | 'completed' | 'failed';
           submagic_download_url: string | null;
           template_name: string;
           language: string;
@@ -286,7 +286,7 @@ export type Database = {
           original_storage_path: string;
           processed_storage_path?: string | null;
           submagic_project_id?: string | null;
-          submagic_status?: 'pending' | 'processing' | 'completed' | 'failed';
+          submagic_status?: 'pending' | 'processing' | 'transcribing' | 'exporting' | 'completed' | 'failed';
           submagic_download_url?: string | null;
           template_name: string;
           language?: string;
@@ -310,7 +310,7 @@ export type Database = {
           original_storage_path?: string;
           processed_storage_path?: string | null;
           submagic_project_id?: string | null;
-          submagic_status?: 'pending' | 'processing' | 'completed' | 'failed';
+          submagic_status?: 'pending' | 'processing' | 'transcribing' | 'exporting' | 'completed' | 'failed';
           submagic_download_url?: string | null;
           template_name?: string;
           language?: string;

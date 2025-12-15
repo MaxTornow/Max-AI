@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS public.videos (
   original_storage_path TEXT NOT NULL,
   processed_storage_path TEXT,
   submagic_project_id TEXT,
-  submagic_status TEXT DEFAULT 'pending' CHECK (submagic_status IN ('pending', 'processing', 'completed', 'failed')),
+  submagic_status TEXT DEFAULT 'pending' CHECK (submagic_status IN ('pending', 'processing', 'transcribing', 'exporting', 'completed', 'failed')),
   submagic_download_url TEXT,
   template_name TEXT NOT NULL,
   language TEXT DEFAULT 'en',

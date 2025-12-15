@@ -73,7 +73,7 @@ export const getSubmagicProjectStatus = async (
   }
 
   const data = await response.json();
-  console.log('Submagic project status:', data.status);
+  console.log('Submagic project status:', data.status, 'downloadUrl:', data.downloadUrl, 'directUrl:', data.directUrl);
   return data;
 };
 

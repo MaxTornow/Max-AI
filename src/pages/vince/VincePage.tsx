@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import { FiPlay, FiLoader } from 'react-icons/fi';
 
@@ -199,12 +199,12 @@ const VincePage: React.FC = () => {
     }
   );
 
-  // Track sync state to prevent duplicate syncs
-  const [isSyncing, setIsSyncing] = useState(false);
+  // Track sync state to prevent duplicate syncs (use ref to avoid stale closure)
+  const isSyncingRef = useRef(false);
 
   // Function to sync processing videos with Submagic API
   const syncProcessingVideos = useCallback(async () => {
-    if (isSyncing || !user?.id) return;
+    if (isSyncingRef.current || !user?.id) return;
 
     const processingVideos = videos.filter(
       (v) => v.submagic_status === 'processing' && v.submagic_project_id
@@ -212,7 +212,7 @@ const VincePage: React.FC = () => {
 
     if (processingVideos.length === 0) return;
 
-    setIsSyncing(true);
+    isSyncingRef.current = true;
     console.log('Found', processingVideos.length, 'videos still processing, syncing status...');
 
     // Take the most recent processing video to restore UI state
@@ -225,18 +225,21 @@ const VincePage: React.FC = () => {
         const status = await getSubmagicProjectStatus(video.submagic_project_id!);
         console.log('Submagic status for', video.id, ':', status.status);
 
-        if (status.status === 'completed' && status.downloadUrl) {
+        // Check for either downloadUrl or directUrl (Submagic returns both)
+        const videoUrl = status.downloadUrl || status.directUrl;
+
+        if (status.status === 'completed' && videoUrl) {
           // Video finished while we were away - update database
-          console.log('Video', video.id, 'completed, updating database');
+          console.log('Video', video.id, 'completed, updating database with URL:', videoUrl);
           const processedPath = await saveProcessedVideo(
-            status.downloadUrl,
+            videoUrl,
             user!.id,
             video.original_filename
           );
           await updateVideoRecord(video.id, {
             submagic_status: 'completed',
             processed_storage_path: processedPath,
-            submagic_download_url: status.downloadUrl,
+            submagic_download_url: videoUrl,
             processing_completed_at: new Date().toISOString(),
           });
           needsRefetch = true;
@@ -248,15 +251,21 @@ const VincePage: React.FC = () => {
             error_message: status.errorMessage || 'Processing failed',
           });
           needsRefetch = true;
-        } else if (status.status === 'processing' && video.id === mostRecentProcessing.id && !uiRestored) {
-          // Video is still processing - restore the UI state to show progress bar
-          console.log('Restoring processing UI for video:', video.id);
+        } else if (['processing', 'transcribing', 'exporting'].includes(status.status) && video.id === mostRecentProcessing.id && !uiRestored) {
+          // Video is still processing (any of the intermediate states) - restore the UI state
+          console.log('Restoring processing UI for video:', video.id, 'status:', status.status);
           setCurrentVideoId(video.id);
           setCurrentProjectId(video.submagic_project_id!);
+
+          // Estimate progress based on current status
+          let estimatedProgress = 30;
+          if (status.status === 'transcribing') estimatedProgress = 50;
+          if (status.status === 'exporting') estimatedProgress = 75;
+
           setProcessingState({
             status: 'processing',
             projectId: video.submagic_project_id!,
-            progress: 50 // Estimate mid-progress since we don't know exact state
+            progress: estimatedProgress
           });
           setUploadState({ status: 'uploaded', videoId: video.id, storagePath: video.original_storage_path });
           uiRestored = true;
@@ -270,22 +279,22 @@ const VincePage: React.FC = () => {
     if (needsRefetch) {
       await refetchVideos();
     }
-    setIsSyncing(false);
-  }, [videos, user?.id, isSyncing, refetchVideos, setCurrentVideoId, setCurrentProjectId, setProcessingState, setUploadState]);
+    isSyncingRef.current = false;
+  }, [videos, user?.id, refetchVideos, setCurrentVideoId, setCurrentProjectId, setProcessingState, setUploadState]);
 
-  // Sync processing videos on mount
+  // Sync processing videos on mount and when videos change
   useEffect(() => {
     if (user?.id && videos.length > 0) {
       syncProcessingVideos();
     }
-  }, [videos.length, user?.id]); // Only run when video count changes or user changes
+  }, [videos.length, user?.id, syncProcessingVideos]);
 
   // Also sync when switching to Library tab
   useEffect(() => {
     if (activeTab === 'library' && videos.length > 0) {
       syncProcessingVideos();
     }
-  }, [activeTab]); // Run when tab changes
+  }, [activeTab, videos.length, syncProcessingVideos]);
 
   // Poll for processing status when we have an active project
   const { data: projectStatus } = useQuery(
@@ -294,7 +303,8 @@ const VincePage: React.FC = () => {
     {
       enabled: !!currentProjectId && processingState.status === 'processing',
       refetchInterval: (data) => {
-        if (data?.status === 'processing') {
+        // Continue polling for all intermediate states
+        if (data?.status && ['processing', 'transcribing', 'exporting'].includes(data.status)) {
           return POLL_INTERVAL;
         }
         return false;
@@ -307,13 +317,18 @@ const VincePage: React.FC = () => {
     if (!projectStatus || !currentVideoId) return;
 
     const handleStatusChange = async () => {
-      if (projectStatus.status === 'completed' && projectStatus.downloadUrl) {
+      // Check for either downloadUrl or directUrl (Submagic returns both)
+      const videoUrl = projectStatus.downloadUrl || projectStatus.directUrl;
+
+      // IMPORTANT: Only handle completion if we're currently in 'processing' state
+      // This prevents infinite loops when processingState changes trigger re-runs
+      if (projectStatus.status === 'completed' && videoUrl && processingState.status === 'processing') {
         setProcessingState({ status: 'downloading', message: 'Saving processed video...' });
 
         try {
           // Try to save processed video to Supabase
           const processedPath = await saveProcessedVideo(
-            projectStatus.downloadUrl,
+            videoUrl,
             user!.id,
             selectedFile?.name || 'video.mp4'
           );
@@ -322,7 +337,7 @@ const VincePage: React.FC = () => {
           await updateVideoRecord(currentVideoId, {
             submagic_status: 'completed',
             processed_storage_path: processedPath,
-            submagic_download_url: projectStatus.downloadUrl,
+            submagic_download_url: videoUrl,
             processing_completed_at: new Date().toISOString(),
           });
 
@@ -340,7 +355,8 @@ const VincePage: React.FC = () => {
             retryable: false,
           });
         }
-      } else if (projectStatus.status === 'failed') {
+      } else if (projectStatus.status === 'failed' && processingState.status === 'processing') {
+        // Only handle failure if we're currently in 'processing' state
         await updateVideoRecord(currentVideoId, {
           submagic_status: 'failed',
           error_message: projectStatus.errorMessage || 'Processing failed',
@@ -353,17 +369,22 @@ const VincePage: React.FC = () => {
         });
         refetchVideos();
         setCurrentProjectId(null);
-      } else if (projectStatus.status === 'processing') {
-        // Update progress (estimated based on time)
-        if (processingState.status === 'processing') {
-          // Slowly increment progress
-          const newProgress = Math.min(processingState.progress + 5, 90);
-          setProcessingState({
-            status: 'processing',
-            projectId: processingState.projectId,
-            progress: newProgress,
-          });
+      } else if (['processing', 'transcribing', 'exporting'].includes(projectStatus.status) && processingState.status === 'processing') {
+        // Update progress based on current Submagic phase
+        let targetProgress = processingState.progress;
+        if (projectStatus.status === 'processing') {
+          targetProgress = Math.min(processingState.progress + 3, 40);
+        } else if (projectStatus.status === 'transcribing') {
+          targetProgress = Math.max(40, Math.min(processingState.progress + 5, 70));
+        } else if (projectStatus.status === 'exporting') {
+          targetProgress = Math.max(70, Math.min(processingState.progress + 5, 90));
         }
+
+        setProcessingState({
+          status: 'processing',
+          projectId: processingState.projectId,
+          progress: targetProgress,
+        });
       }
     };
 

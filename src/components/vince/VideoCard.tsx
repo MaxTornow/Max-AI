@@ -30,6 +30,18 @@ const getStatusInfo = (status: SubmagicStatus) => {
         label: 'Processing',
         color: 'text-blue-600 bg-blue-100 dark:bg-blue-900/40',
       };
+    case 'transcribing':
+      return {
+        icon: <FiLoader className="w-4 h-4 animate-spin" />,
+        label: 'Transcribing',
+        color: 'text-blue-600 bg-blue-100 dark:bg-blue-900/40',
+      };
+    case 'exporting':
+      return {
+        icon: <FiLoader className="w-4 h-4 animate-spin" />,
+        label: 'Exporting',
+        color: 'text-purple-600 bg-purple-100 dark:bg-purple-900/40',
+      };
     case 'completed':
       return {
         icon: <FiCheck className="w-4 h-4" />,
