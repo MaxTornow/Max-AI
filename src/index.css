@@ -59,6 +59,13 @@
   font-display: swap;
 }
 
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/Inter/static/Inter_28pt-Bold.ttf') format('truetype');
+  font-weight: bold;
+  font-display: swap;
+}
+
 @layer base {
   body {
     @apply bg-white text-gray-900 dark:bg-gray-900 dark:text-gray-100;

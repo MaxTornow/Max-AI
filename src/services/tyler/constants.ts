@@ -14,6 +14,7 @@ export const FONTS: FontOption[] = [
     { name: 'Open Sans', file: 'Open_Sans/static/OpenSans-Bold.ttf', style: 'Readable' },
     { name: 'Lato', file: 'Lato/Lato-Bold.ttf', style: 'Professional' },
     { name: 'Anton', file: 'Anton/Anton-Regular.ttf', style: 'Strong, bold' },
+    { name: 'Inter', file: 'Inter/static/Inter_28pt-Bold.ttf', style: 'Clean, versatile' },
 ];
 
 /** Font size limits */

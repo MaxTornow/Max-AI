@@ -41,6 +41,7 @@ export function getCssFontFamily(fontName: string): string {
         'Open Sans': "'Open Sans', sans-serif",
         'Lato': "'Lato', sans-serif",
         'Anton': "'Anton', sans-serif",
+        'Inter': "'Inter', sans-serif",
     };
     return fontMap[fontName] || 'sans-serif';
 }
