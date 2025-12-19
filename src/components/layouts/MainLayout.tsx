@@ -21,6 +21,17 @@ import {
 } from 'react-icons/fi';
 
 /**
+ * Navigation item type - supports regular links and separators
+ */
+type NavItem = {
+  path: string;
+  label: string;
+  icon: JSX.Element;
+} | {
+  type: 'separator';
+};
+
+/**
  * Main layout component with sidebar navigation
  * @returns {JSX.Element} MainLayout component
  */
@@ -44,21 +55,21 @@ const MainLayout: React.FC = () => {
     }
   };
 
-  // Navigation items
-  const navItems = [
+  // Navigation items with new labels and order
+  const navItems: NavItem[] = [
     { path: '/', label: 'Dashboard', icon: <FiHome size={20} /> },
-    { path: '/ava', label: 'AVA (Advanced Viral Automator)', icon: <FiMessageSquare size={20} /> },
-    { path: '/aimax', label: 'AI MAX (VGA Course Coach)', icon: <FiAward size={20} /> },
-    { path: '/create-rewrite', label: 'VERA (Viral Enhanced Rewrite Automator)', icon: <FiCopy size={20} /> },
-    { path: '/lara', label: 'LARA (LinkedIn Automated Rewriting Assistant)', icon: <FiMessageSquare size={20} /> },
-    { path: '/lacy', label: 'LACY (LinkedIn Automated Content for You)', icon: <FiMessageSquare size={20} /> },
-    { path: '/franck', label: 'FRANCK (Facebook Relevant Automated Niche Content Kreator)', icon: <FiMessageSquare size={20} /> },
-    { path: '/faris', label: 'FARIS (Facebook Automated Rewriting Intelligent Scholar)', icon: <FiMessageSquare size={20} /> },
-    { path: '/sage', label: 'SAGE (Script Analysis & Grading Engine)', icon: <FiCheckCircle size={20} /> },
-    { path: '/vince', label: 'VINCE (Vertical INstant Content Editor)', icon: <FiFilm size={20} /> },
-    { path: '/tyler', label: 'TYLER (Text Overlay for Your Videos)', icon: <FiFilm size={20} /> },
+    { path: '/ava', label: 'Ideation & Scripting AI', icon: <FiMessageSquare size={20} /> },
+    { path: '/create-rewrite', label: 'Rewriting AI', icon: <FiCopy size={20} /> },
+    { path: '/aimax', label: 'AI Max Viral Coach', icon: <FiAward size={20} /> },
+    { path: '/sage', label: 'Script Feedback AI', icon: <FiCheckCircle size={20} /> },
+    { path: '/vince', label: 'AI Video Editor', icon: <FiFilm size={20} /> },
+    { path: '/tyler', label: 'AI Simple Clip Editor', icon: <FiFilm size={20} /> },
     { path: '/my-styles', label: 'My Styles', icon: <FiList size={20} /> },
-    { path: '/all-rewrites', label: 'All Rewrites', icon: <FiList size={20} /> },
+    { type: 'separator' },
+    { path: '/lara', label: 'LinkedIn Rewriting AI', icon: <FiMessageSquare size={20} /> },
+    { path: '/lacy', label: 'LinkedIn Script Writing AI', icon: <FiMessageSquare size={20} /> },
+    { path: '/franck', label: 'Facebook Script Writing AI', icon: <FiMessageSquare size={20} /> },
+    { path: '/faris', label: 'Facebook Rewriting AI', icon: <FiMessageSquare size={20} /> },
     { path: '/settings', label: 'Settings', icon: <FiSettings size={20} /> },
   ];
 
@@ -95,22 +106,35 @@ const MainLayout: React.FC = () => {
           {/* Navigation */}
           <nav className="flex-1 px-2 py-4 overflow-y-auto">
             <ul className="space-y-1">
-              {navItems.map((item) => (
-                <li key={item.path}>
-                  <Link
-                    to={item.path}
-                    className={`flex items-center px-4 py-3 rounded-md transition-colors ${
-                      location.pathname === item.path
-                        ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/20 dark:text-primary-300'
-                        : 'text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700/30'
-                    }`}
-                    onClick={closeSidebarOnMobile}
-                  >
-                    <span className="mr-3">{item.icon}</span>
-                    <span>{item.label}</span>
-                  </Link>
-                </li>
-              ))}
+              {navItems.map((item, index) => {
+                // Handle separator
+                if ('type' in item && item.type === 'separator') {
+                  return (
+                    <li key={`separator-${index}`} aria-hidden="true">
+                      <hr className="my-3 border-gray-200 dark:border-gray-700" />
+                    </li>
+                  );
+                }
+
+                // Handle regular nav item - cast to link type since we've excluded separator above
+                const navItem = item as { path: string; label: string; icon: JSX.Element };
+                return (
+                  <li key={navItem.path}>
+                    <Link
+                      to={navItem.path}
+                      className={`flex items-center px-4 py-3 rounded-md transition-colors ${
+                        location.pathname === navItem.path
+                          ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/20 dark:text-primary-300'
+                          : 'text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700/30'
+                      }`}
+                      onClick={closeSidebarOnMobile}
+                    >
+                      <span className="mr-3">{navItem.icon}</span>
+                      <span>{navItem.label}</span>
+                    </Link>
+                  </li>
+                );
+              })}
             </ul>
           </nav>
 

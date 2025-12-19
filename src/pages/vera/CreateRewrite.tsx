@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FiChevronDown, FiChevronUp, FiPlus, FiCopy, FiSave } from 'react-icons/fi';
+import { FiChevronDown, FiChevronUp, FiPlus, FiCopy, FiSave, FiExternalLink, FiTrash2 } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
 import StyleForm from '../../components/styles/StyleForm';
 import { useAuth } from '../../context/AuthContext';
@@ -7,7 +7,8 @@ import { useStyles } from '../../context/StylesContext';
 import { useToast } from '../../context/ToastContext';
 import { processVideo, VideoProcessingRequest } from '../../services/videoProcessing';
 import { ProcessingStatus, ProcessingStage } from '../../services/videoProcessing/types';
-import { saveRewriteScript, RewriteParameters } from '../../services/rewrites/rewriteService';
+import { saveRewriteScript, RewriteParameters, getUserRewrites, deleteRewrite, RewriteRow } from '../../services/rewrites/rewriteService';
+import ConfirmationModal from '../../components/ui/ConfirmationModal';
 
 /**
  * Step interface for the rewrite creation process
@@ -118,7 +119,17 @@ const CreateRewrite: React.FC = () => {
     message: 'Preparing to process video...'
   });
   const [estimatedTimeRemaining, setEstimatedTimeRemaining] = useState<number | undefined>(undefined);
-  
+
+  // Saved rewrites state
+  const [savedRewrites, setSavedRewrites] = useState<RewriteRow[]>([]);
+  const [rewritesLoading, setRewritesLoading] = useState<boolean>(true);
+  const [rewritesError, setRewritesError] = useState<string | null>(null);
+  const [expandedRewrite, setExpandedRewrite] = useState<string | null>(null);
+  const [showSavedRewrites, setShowSavedRewrites] = useState<boolean>(false);
+  const [deletingRewrite, setDeletingRewrite] = useState<string | null>(null);
+  const [rewriteToDelete, setRewriteToDelete] = useState<RewriteRow | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
+
   // Platform detection from URL
   useEffect(() => {
     if (!videoUrl) return;
@@ -137,6 +148,30 @@ const CreateRewrite: React.FC = () => {
       console.log('Invalid URL format');
     }
   }, [videoUrl]);
+
+  // Load saved rewrites
+  useEffect(() => {
+    const fetchRewrites = async () => {
+      if (!user) return;
+
+      try {
+        setRewritesLoading(true);
+        const { data, error } = await getUserRewrites(user.id);
+
+        if (error) {
+          setRewritesError(error);
+        } else if (data) {
+          setSavedRewrites(data);
+        }
+      } catch (err: any) {
+        setRewritesError(err.message || 'An error occurred while fetching rewrites');
+      } finally {
+        setRewritesLoading(false);
+      }
+    };
+
+    fetchRewrites();
+  }, [user]);
 
   /**
    * Toggle step collapse/expand
@@ -422,6 +457,70 @@ const CreateRewrite: React.FC = () => {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  /**
+   * Toggle expand/collapse for a saved rewrite
+   */
+  const toggleExpandRewrite = (id: string) => {
+    setExpandedRewrite(expandedRewrite === id ? null : id);
+  };
+
+  /**
+   * Handle delete button click - show confirmation modal
+   */
+  const handleDeleteRewriteClick = (rewrite: RewriteRow, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setRewriteToDelete(rewrite);
+    setShowDeleteModal(true);
+  };
+
+  /**
+   * Confirm and execute delete
+   */
+  const handleConfirmDeleteRewrite = async () => {
+    if (!rewriteToDelete) return;
+
+    setDeletingRewrite(rewriteToDelete.id);
+
+    try {
+      const { success, error } = await deleteRewrite(rewriteToDelete.id);
+
+      if (success) {
+        setSavedRewrites(prev => prev.filter(r => r.id !== rewriteToDelete.id));
+        showToast('Rewrite deleted successfully', 'success');
+      } else {
+        showToast(error || 'Failed to delete rewrite', 'error');
+      }
+    } catch (err: any) {
+      showToast('An unexpected error occurred', 'error');
+    } finally {
+      setDeletingRewrite(null);
+      setShowDeleteModal(false);
+      setRewriteToDelete(null);
+    }
+  };
+
+  /**
+   * Cancel delete operation
+   */
+  const handleCancelDeleteRewrite = () => {
+    setShowDeleteModal(false);
+    setRewriteToDelete(null);
+  };
+
+  /**
+   * Format date for display
+   */
+  const formatRewriteDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
 
   /**
@@ -828,7 +927,136 @@ const CreateRewrite: React.FC = () => {
           </div>
         )}
       </div>
-      
+
+      {/* Saved Rewrites Section */}
+      <div className="mb-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden">
+        <div
+          className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700"
+          onClick={() => setShowSavedRewrites(!showSavedRewrites)}
+        >
+          <div className="flex items-center">
+            <span className="mr-2 font-medium">Saved Rewrites</span>
+            <span className="text-xs bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200 px-2 py-1 rounded-full">
+              {savedRewrites.length}
+            </span>
+          </div>
+          {showSavedRewrites ? <FiChevronUp /> : <FiChevronDown />}
+        </div>
+
+        {showSavedRewrites && (
+          <div className="p-4 border-t dark:border-gray-700">
+            {rewritesLoading ? (
+              <div className="flex justify-center items-center py-4">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600"></div>
+                <span className="ml-2 text-sm text-gray-500">Loading rewrites...</span>
+              </div>
+            ) : rewritesError ? (
+              <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+                <p>{rewritesError}</p>
+              </div>
+            ) : savedRewrites.length === 0 ? (
+              <p className="text-center py-4 text-gray-500 dark:text-gray-400">
+                No saved rewrites yet. Create a rewrite above to get started.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {savedRewrites.map((rewrite) => (
+                  <div key={rewrite.id} className="border border-gray-200 dark:border-gray-700 rounded-md overflow-hidden">
+                    <div
+                      className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 cursor-pointer"
+                      onClick={() => toggleExpandRewrite(rewrite.id)}
+                    >
+                      <div>
+                        <span className="font-medium text-sm">
+                          {rewrite.platform.charAt(0).toUpperCase() + rewrite.platform.slice(1)} Rewrite
+                        </span>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {formatRewriteDate(rewrite.created_at)}
+                        </p>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <a
+                          href={rewrite.original_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400"
+                          title="View original"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <FiExternalLink size={16} />
+                        </a>
+                        <button
+                          className="p-1 text-gray-500 hover:text-red-600 dark:text-gray-400"
+                          title="Delete"
+                          onClick={(e) => handleDeleteRewriteClick(rewrite, e)}
+                          disabled={deletingRewrite === rewrite.id}
+                        >
+                          {deletingRewrite === rewrite.id ? (
+                            <div className="h-4 w-4 animate-spin rounded-full border-b-2 border-red-600"></div>
+                          ) : (
+                            <FiTrash2 size={16} />
+                          )}
+                        </button>
+                        {expandedRewrite === rewrite.id ? <FiChevronUp size={16} /> : <FiChevronDown size={16} />}
+                      </div>
+                    </div>
+
+                    {expandedRewrite === rewrite.id && (
+                      <div className="p-3 border-t dark:border-gray-600">
+                        <div className="mb-3">
+                          <h4 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Style Parameters</h4>
+                          <div className="text-xs bg-gray-50 dark:bg-gray-800 p-2 rounded">
+                            <p><span className="font-medium">Niche:</span> {rewrite.parameters.niche}</p>
+                            <p><span className="font-medium">Target:</span> {rewrite.parameters.target_audience}</p>
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          {rewrite.variations.map((variation) => (
+                            <div key={variation.id} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded p-2">
+                              <div className="flex justify-between items-center mb-1">
+                                <span className="text-xs text-gray-500">{formatRewriteDate(variation.created_at)}</span>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    copyToClipboard(variation.content);
+                                  }}
+                                  className="p-1 text-gray-500 hover:text-gray-700"
+                                  title="Copy"
+                                >
+                                  <FiCopy size={14} />
+                                </button>
+                              </div>
+                              <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-line">
+                                {variation.content}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Delete Rewrite Confirmation Modal */}
+      {showDeleteModal && rewriteToDelete && (
+        <ConfirmationModal
+          title="Delete Rewrite"
+          message={`Are you sure you want to delete this ${rewriteToDelete.platform} rewrite?`}
+          details="This action cannot be undone."
+          confirmText="Delete"
+          cancelText="Cancel"
+          isLoading={deletingRewrite === rewriteToDelete.id}
+          onConfirm={handleConfirmDeleteRewrite}
+          onCancel={handleCancelDeleteRewrite}
+          type="danger"
+        />
+      )}
+
       {/* Style Form Modal */}
       {modal.isOpen && (
         <div className="fixed inset-0 z-50 overflow-y-auto">

@@ -38,7 +38,6 @@ import AIMaxChat from './pages/aiMax/AIMaxChat';
 import SageChat from './pages/sage/SageChat';
 import CreateRewrite from './pages/vera/CreateRewrite';
 import MyStyles from './pages/styles/MyStyles';
-import AllRewrites from './pages/rewrites/AllRewrites';
 import Settings from './pages/settings/Settings';
 import VincePage from './pages/vince/VincePage';
 import SimpleTextOverlayPage from './pages/tyler/SimpleTextOverlayPage';
@@ -97,10 +96,11 @@ const AppContent: React.FC = () => {
           <Route path="sage" element={<SageChat />} />
           <Route path="create-rewrite" element={<CreateRewrite />} />
           <Route path="my-styles" element={<MyStyles />} />
-          <Route path="all-rewrites" element={<AllRewrites />} />
           <Route path="vince" element={<VincePage />} />
           <Route path="tyler" element={<SimpleTextOverlayPage />} />
           <Route path="settings" element={<Settings />} />
+          {/* Redirect old All Rewrites route to VERA */}
+          <Route path="all-rewrites" element={<Navigate to="/create-rewrite" replace />} />
         </Route>
       </Route>
       

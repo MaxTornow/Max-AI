@@ -263,9 +263,9 @@ const AIMaxChat: React.FC = () => {
       <div className="bg-white dark:bg-gray-800 border-b dark:border-gray-700 p-4">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">AI Max Chat</h1>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">AI Max Viral Coach</h1>
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              VGA Course Coach
+              Your VGA program knowledge base - get video links & timestamps
             </p>
           </div>
 
@@ -357,11 +357,11 @@ const AIMaxChat: React.FC = () => {
         {messages.length <= 1 && !isLoading && (
           <div className="flex flex-wrap gap-2 justify-center">
             <button
-              onClick={() => handleQuickAction("Ask me anything about the VGA course")}
-              className="flex items-center space-x-2 px-4 py-2 bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300 rounded-lg hover:bg-orange-200 dark:hover:bg-orange-800 transition-colors"
+              onClick={() => handleQuickAction("I have questions about the VGA program")}
+              className="flex items-center space-x-2 px-4 py-2 bg-amber-400 dark:bg-amber-500 text-amber-900 dark:text-amber-900 rounded-lg hover:bg-amber-500 dark:hover:bg-amber-400 transition-colors font-medium"
             >
               <FiZap size={16} />
-              <span>Ask me anything about the VGA course</span>
+              <span>I have questions about the VGA program</span>
             </button>
           </div>
         )}
