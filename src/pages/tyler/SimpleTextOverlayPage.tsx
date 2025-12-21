@@ -27,7 +27,7 @@ interface PersistedState {
 }
 
 /**
- * TYLER - Simple Text Overlay Page
+ * TOBY - Text Overlays By You
  * Browser-based video text overlay with ffmpeg.wasm
  * Export state is managed globally via ExportContext
  */
@@ -194,10 +194,10 @@ const SimpleTextOverlayPage: React.FC = () => {
             {/* Header */}
             <div className="mb-6">
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                    TYLER
+                    TOBY
                 </h1>
                 <p className="text-gray-500 dark:text-gray-400 mt-1">
-                    Simple Text Overlay for Videos
+                    Text Overlays By You
                 </p>
             </div>
 

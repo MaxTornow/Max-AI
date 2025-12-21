@@ -86,9 +86,9 @@ const CreateRewrite: React.FC = () => {
   
   // State for managing steps
   const [steps, setSteps] = useState<Step[]>([
-    { id: 1, title: 'Video Input', isOpen: true, isCompleted: false },
-    { id: 2, title: 'Story & Communication Style', isOpen: false, isCompleted: false },
-    { id: 3, title: 'Generated Scripts', isOpen: false, isCompleted: false },
+    { id: 1, title: 'Paste the link to the video you want to have rewritten', isOpen: true, isCompleted: false },
+    { id: 2, title: 'Pick story and communication style', isOpen: false, isCompleted: false },
+    { id: 3, title: 'Generate script', isOpen: false, isCompleted: false },
   ]);
   
   // State for video URL input
@@ -587,7 +587,7 @@ const CreateRewrite: React.FC = () => {
 
   return (
     <div className="container mx-auto px-4 py-6">
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Create New Rewrite</h1>
+      <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">VERA - Viral Enhanced Rewrite Automator</h1>
       
       {/* Step 1: Video Input */}
       <div className="mb-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden">
@@ -596,7 +596,7 @@ const CreateRewrite: React.FC = () => {
           onClick={() => toggleStep(1)}
         >
           <div className="flex items-center">
-            <span className="mr-2 font-medium">Step 1: Video Input</span>
+            <span className="mr-2 font-medium">Step 1: Paste the link to the video you want to have rewritten</span>
             {steps[0].isCompleted && (
               <span className="text-xs bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100 px-2 py-1 rounded-full">Completed</span>
             )}
@@ -618,6 +618,7 @@ const CreateRewrite: React.FC = () => {
                 value={videoUrl}
                 onChange={handleVideoUrlChange}
               />
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">(Only works for videos with spoken audio)</p>
             </div>
             <button
               className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -638,7 +639,7 @@ const CreateRewrite: React.FC = () => {
           onClick={() => toggleStep(2)}
         >
           <div className="flex items-center">
-            <span className="mr-2 font-medium">Step 2: Story & Communication Style</span>
+            <span className="mr-2 font-medium">Step 2: Pick story and communication style</span>
             {steps[1].isCompleted && (
               <span className="text-xs bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100 px-2 py-1 rounded-full">Completed</span>
             )}
@@ -733,7 +734,7 @@ const CreateRewrite: React.FC = () => {
           onClick={() => toggleStep(3)}
         >
           <div className="flex items-center">
-            <span className="mr-2 font-medium">Step 3: Generated Scripts</span>
+            <span className="mr-2 font-medium">Step 3: Generate script</span>
             {steps[2].isCompleted && (
               <span className="text-xs bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100 px-2 py-1 rounded-full">Completed</span>
             )}
@@ -898,9 +899,9 @@ const CreateRewrite: React.FC = () => {
                       setVideoUrl('');
                       setSelectedStyleId('');
                       setSteps([
-                        { id: 1, title: 'Video Input', isOpen: true, isCompleted: false },
-                        { id: 2, title: 'Story & Communication Style', isOpen: false, isCompleted: false },
-                        { id: 3, title: 'Generated Scripts', isOpen: false, isCompleted: false },
+                        { id: 1, title: 'Paste the link to the video you want to have rewritten', isOpen: true, isCompleted: false },
+                        { id: 2, title: 'Pick story and communication style', isOpen: false, isCompleted: false },
+                        { id: 3, title: 'Generate script', isOpen: false, isCompleted: false },
                       ]);
                     }}
                     disabled={isSaving}
