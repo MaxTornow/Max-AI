@@ -6,6 +6,9 @@
 /** Text alignment options */
 export type TextAlignment = 'left' | 'center' | 'right';
 
+/** Layer identifier */
+export type LayerId = 'headline' | 'body';
+
 /** Available font options */
 export interface FontOption {
     name: string;          // Display name: "Montserrat"
@@ -13,13 +16,30 @@ export interface FontOption {
     style: string;         // Description: "Modern, clean"
 }
 
-/** Text overlay settings */
-export interface TextOverlaySettings {
+/** Individual text layer configuration */
+export interface TextLayer {
+    id: LayerId;
+    enabled: boolean;
     text: string;
-    fontName: string;
     fontSize: number;           // 20-120 pixels
     textColor: string;          // Hex: "#FFFFFF"
-    yPositionPercent: number;   // 0-100, vertical position (0 = top edge at top)
+    yPositionPercent: number;   // 0-100, vertical position
+    alignment: TextAlignment;
+}
+
+/** Text overlay settings - supports multiple layers sharing a font */
+export interface TextOverlaySettings {
+    fontName: string;           // Shared across all layers
+    layers: TextLayer[];        // Array of layer configurations
+}
+
+/** OLD format for migration detection - DO NOT USE for new code */
+export interface LegacyTextOverlaySettings {
+    text: string;
+    fontName: string;
+    fontSize: number;
+    textColor: string;
+    yPositionPercent: number;
     alignment: TextAlignment;
 }
 

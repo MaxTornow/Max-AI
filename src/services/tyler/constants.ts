@@ -2,7 +2,7 @@
  * TYLER - Constants and Configuration
  */
 
-import type { FontOption, TextOverlaySettings } from './types';
+import type { FontOption, TextOverlaySettings, TextLayer } from './types';
 
 /** Available fonts - must match files in public/fonts/ */
 export const FONTS: FontOption[] = [
@@ -19,17 +19,38 @@ export const FONTS: FontOption[] = [
 
 /** Font size limits */
 export const MIN_FONT_SIZE = 20;
-export const MAX_FONT_SIZE = 120;
+export const MAX_FONT_SIZE = 240;
 export const DEFAULT_FONT_SIZE = 48;
 
-/** Default settings */
-export const DEFAULT_SETTINGS: TextOverlaySettings = {
+/** Default headline layer (disabled by default) */
+export const DEFAULT_HEADLINE_LAYER: TextLayer = {
+    id: 'headline',
+    enabled: false,
     text: '',
-    fontName: 'Montserrat',
-    fontSize: DEFAULT_FONT_SIZE,
+    fontSize: 72,               // Larger for impact
     textColor: '#FFFFFF',
-    yPositionPercent: 50,  // Middle (0 = top, 100 = bottom)
+    yPositionPercent: 15,       // Top third
     alignment: 'center',
+};
+
+/** Default body layer (enabled by default for backward compatibility) */
+export const DEFAULT_BODY_LAYER: TextLayer = {
+    id: 'body',
+    enabled: true,
+    text: '',
+    fontSize: 42,               // Smaller than headline
+    textColor: '#FFFFFF',
+    yPositionPercent: 75,       // Bottom third
+    alignment: 'center',
+};
+
+/** Default settings - NEW STRUCTURE with layers */
+export const DEFAULT_SETTINGS: TextOverlaySettings = {
+    fontName: 'Montserrat',
+    layers: [
+        { ...DEFAULT_HEADLINE_LAYER },
+        { ...DEFAULT_BODY_LAYER },
+    ],
 };
 
 /** File limits */

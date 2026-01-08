@@ -10,7 +10,7 @@
 
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile, toBlobURL } from '@ffmpeg/util';
-import type { TextOverlaySettings, TextAlignment } from './types';
+import type { TextOverlaySettings, TextAlignment, TextLayer } from './types';
 import { getCssFontFamily } from './textUtils';
 
 // FFmpeg CDN for audio operations
@@ -102,11 +102,11 @@ class CanvasExportService {
      * Calculate Y position to match VideoPreview.tsx exactly
      */
     private getYPosition(
-        settings: TextOverlaySettings,
+        yPositionPercent: number,
         videoHeight: number,
         totalTextHeight: number
     ): number {
-        const yPosition = videoHeight * (settings.yPositionPercent / 100) - totalTextHeight / 2;
+        const yPosition = videoHeight * (yPositionPercent / 100) - totalTextHeight / 2;
         return Math.max(0, Math.min(videoHeight - totalTextHeight, yPosition));
     }
 
@@ -130,24 +130,25 @@ class CanvasExportService {
     }
 
     /**
-     * Draw text overlay on canvas matching VideoPreview.tsx exactly
+     * Draw a single text layer on canvas
      */
-    private drawTextOverlay(
+    private drawSingleLayer(
         ctx: CanvasRenderingContext2D,
-        settings: TextOverlaySettings,
+        layer: TextLayer,
+        fontName: string,
         videoWidth: number,
         videoHeight: number
     ): void {
-        if (!settings.text.trim()) return;
+        if (!layer.text.trim()) return;
 
-        const fontSize = settings.fontSize;
+        const fontSize = layer.fontSize;
         const lineHeight = fontSize * 1.3;
-        const lines = settings.text.split('\n').filter(line => line.trim());
+        const lines = layer.text.split('\n').filter(line => line.trim());
         const totalTextHeight = lines.length * lineHeight;
 
         // Set font properties to match CSS
-        ctx.font = `bold ${fontSize}px ${getCssFontFamily(settings.fontName)}`;
-        ctx.fillStyle = settings.textColor;
+        ctx.font = `bold ${fontSize}px ${getCssFontFamily(fontName)}`;
+        ctx.fillStyle = layer.textColor;
         ctx.textBaseline = 'top';
 
         // Shadow matching VideoPreview.tsx
@@ -158,7 +159,7 @@ class CanvasExportService {
         ctx.shadowBlur = shadowSize * 2;
 
         // Calculate Y position
-        const baseY = this.getYPosition(settings, videoHeight, totalTextHeight);
+        const baseY = this.getYPosition(layer.yPositionPercent, videoHeight, totalTextHeight);
 
         // Calculate max width for wrapping (90% of video width)
         const maxWidth = videoWidth * 0.9;
@@ -171,10 +172,32 @@ class CanvasExportService {
 
             for (const wrappedLine of wrappedLines) {
                 const textMetrics = ctx.measureText(wrappedLine);
-                const x = this.getXPosition(settings.alignment, videoWidth, textMetrics.width);
+                const x = this.getXPosition(layer.alignment, videoWidth, textMetrics.width);
                 ctx.fillText(wrappedLine, x, currentY);
                 currentY += lineHeight;
             }
+        }
+    }
+
+    /**
+     * Draw all text overlay layers on canvas
+     * Renders body first (background), headline last (foreground) for correct z-order
+     */
+    private drawTextOverlay(
+        ctx: CanvasRenderingContext2D,
+        settings: TextOverlaySettings,
+        videoWidth: number,
+        videoHeight: number
+    ): void {
+        // Filter to enabled layers with text, sort by render order (body first, headline last)
+        const layersToRender = settings.layers
+            .filter(l => l.enabled && l.text.trim())
+            .sort((a, b) => a.id === 'body' ? -1 : 1);
+
+        for (const layer of layersToRender) {
+            ctx.save();  // Isolate layer state
+            this.drawSingleLayer(ctx, layer, settings.fontName, videoWidth, videoHeight);
+            ctx.restore();  // Reset state for next layer
         }
     }
 
@@ -304,10 +327,13 @@ class CanvasExportService {
                 const duration = video.duration;
                 console.log('[CanvasExport] Video ready, duration:', duration, 'currentTime:', video.currentTime);
 
-                // Create scaled settings for text overlay (scale font size with canvas)
+                // Create scaled settings for text overlay (scale font size with canvas for each layer)
                 const scaledSettings: TextOverlaySettings = {
                     ...settings,
-                    fontSize: Math.round(settings.fontSize * scaleFactor),
+                    layers: settings.layers.map(layer => ({
+                        ...layer,
+                        fontSize: Math.round(layer.fontSize * scaleFactor),
+                    })),
                 };
 
                 // Function to start recording once video is ready

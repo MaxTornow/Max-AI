@@ -7,7 +7,7 @@ import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile, toBlobURL } from '@ffmpeg/util';
 import { FONTS } from './constants';
 import { escapeTextForFFmpeg } from './textUtils';
-import type { TextOverlaySettings, TextAlignment } from './types';
+import type { TextOverlaySettings, TextAlignment, TextLayer } from './types';
 
 // CRITICAL: Load from unpkg CDN for proper SharedArrayBuffer support
 const BASE_URL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
@@ -130,31 +130,41 @@ class FFmpegService {
             const outputName = 'output.mp4';
             await this.ffmpeg.writeFile(inputName, await fetchFile(videoFile));
 
-            // Build drawtext filter for each line
+            // Build drawtext filter for each layer
             const fontFilePath = FONTS.find(f => f.name === settings.fontName)?.file || FONTS[0].file;
             const fontFile = fontFilePath.split('/').pop() || fontFilePath;
-            const fontColor = settings.textColor.replace('#', '');
 
-            // Split text into lines and create a drawtext filter for each
-            const lines = settings.text.split('\n').filter(line => line.trim());
-            const lineHeight = settings.fontSize * 1.3; // Line spacing
-            const totalTextHeight = lines.length * lineHeight;
+            // Filter enabled layers with text, sort by render order (body first, headline last)
+            const layersToRender = settings.layers
+                .filter(l => l.enabled && l.text.trim())
+                .sort((a, b) => a.id === 'body' ? -1 : 1);
 
-            // Calculate base Y position for the text block
-            // CRITICAL: This formula MUST match getYPosition in VideoPreview.tsx exactly
-            const baseY = this.getBaseYPosition(settings.yPositionPercent, videoHeight, totalTextHeight);
+            // Build filter chain with drawtext for each layer's lines
+            const allDrawtextFilters: string[] = [];
 
-            // Build filter chain with one drawtext per line
-            const drawtextFilters = lines.map((line, index) => {
-                const escapedLine = this.escapeForDrawtext(line);
-                const lineY = Math.round(baseY + (index * lineHeight));
-                const xPos = this.getXPositionExpr(settings.alignment);
+            for (const layer of layersToRender) {
+                const fontColor = layer.textColor.replace('#', '');
+                const lines = layer.text.split('\n').filter((line: string) => line.trim());
+                const lineHeight = layer.fontSize * 1.3; // Line spacing
+                const totalTextHeight = lines.length * lineHeight;
 
-                return `drawtext=text='${escapedLine}':fontfile=/fonts/${fontFile}:fontsize=${settings.fontSize}:fontcolor=${fontColor}:${xPos}:y=${lineY}:shadowcolor=black@0.7:shadowx=2:shadowy=2`;
-            });
+                // Calculate base Y position for this layer's text block
+                const baseY = this.getBaseYPosition(layer.yPositionPercent, videoHeight, totalTextHeight);
+
+                // Build drawtext filter for each line in this layer
+                const layerFilters = lines.map((line: string, index: number) => {
+                    const escapedLine = this.escapeForDrawtext(line);
+                    const lineY = Math.round(baseY + (index * lineHeight));
+                    const xPos = this.getXPositionExpr(layer.alignment);
+
+                    return `drawtext=text='${escapedLine}':fontfile=/fonts/${fontFile}:fontsize=${layer.fontSize}:fontcolor=${fontColor}:${xPos}:y=${lineY}:shadowcolor=black@0.7:shadowx=2:shadowy=2`;
+                });
+
+                allDrawtextFilters.push(...layerFilters);
+            }
 
             // Join all drawtext filters
-            const filterComplex = drawtextFilters.join(',');
+            const filterComplex = allDrawtextFilters.join(',');
 
             // Log the filter for debugging
             console.log('FFmpeg filter:', filterComplex);

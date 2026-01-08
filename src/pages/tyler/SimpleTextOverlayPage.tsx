@@ -12,13 +12,58 @@ import {
 
 import {
     DEFAULT_SETTINGS,
+    DEFAULT_HEADLINE_LAYER,
+    DEFAULT_BODY_LAYER,
     storeVideo,
     retrieveVideo,
     clearAllVideos,
 } from '@services/tyler';
-import type { TextOverlaySettings } from '@services/tyler/types';
+import type { TextOverlaySettings, LegacyTextOverlaySettings } from '@services/tyler/types';
 
 const STORAGE_KEY = 'tyler_state';
+
+/** Type guard for legacy format detection */
+function isLegacyFormat(saved: unknown): saved is LegacyTextOverlaySettings {
+    if (!saved || typeof saved !== 'object') return false;
+    const obj = saved as Record<string, unknown>;
+    return (
+        typeof obj.text === 'string' &&
+        typeof obj.fontName === 'string' &&
+        !Array.isArray(obj.layers) &&
+        !('layers' in obj)
+    );
+}
+
+/** Migrate legacy settings to new layer-based format */
+function migrateSettings(saved: unknown): TextOverlaySettings {
+    // Case 1: New format - return as-is
+    if (saved && typeof saved === 'object' && 'layers' in saved && Array.isArray((saved as TextOverlaySettings).layers)) {
+        return saved as TextOverlaySettings;
+    }
+
+    // Case 2: Legacy format - migrate to layers
+    if (isLegacyFormat(saved)) {
+        console.log('[Tyler] Migrating legacy settings to layer format');
+        return {
+            fontName: saved.fontName,
+            layers: [
+                { ...DEFAULT_HEADLINE_LAYER },  // Headline disabled by default
+                {
+                    ...DEFAULT_BODY_LAYER,
+                    enabled: true,
+                    text: saved.text,
+                    fontSize: saved.fontSize,
+                    textColor: saved.textColor,
+                    yPositionPercent: saved.yPositionPercent,
+                    alignment: saved.alignment,
+                },
+            ],
+        };
+    }
+
+    // Case 3: No data or invalid - return defaults
+    return { ...DEFAULT_SETTINGS };
+}
 
 interface PersistedState {
     settings: TextOverlaySettings;
@@ -37,12 +82,19 @@ const SimpleTextOverlayPage: React.FC = () => {
     const videoFileRef = useRef<File | null>(null);
     const hasRestoredRef = useRef(false);
 
-    // Load persisted state on mount
+    // Load persisted state on mount with migration support
     const loadPersistedState = (): PersistedState | null => {
         try {
             const stored = sessionStorage.getItem(STORAGE_KEY);
             if (stored) {
-                return JSON.parse(stored);
+                const parsed = JSON.parse(stored);
+                // Migrate settings if needed (handles legacy single-text format)
+                const migratedSettings = migrateSettings(parsed.settings);
+                return {
+                    settings: migratedSettings,
+                    videoFileName: parsed.videoFileName || null,
+                    videoDimensions: parsed.videoDimensions || null,
+                };
             }
         } catch (e) {
             console.warn('Failed to load Tyler state from sessionStorage:', e);
@@ -168,8 +220,10 @@ const SimpleTextOverlayPage: React.FC = () => {
             return;
         }
 
-        if (!settings.text.trim()) {
-            showToast('Please enter some text', 'error');
+        // Check if any layer has text content
+        const hasTextContent = settings.layers.some(l => l.enabled && l.text.trim());
+        if (!hasTextContent) {
+            showToast('Please enter some text in at least one enabled layer', 'error');
             return;
         }
 
@@ -187,7 +241,11 @@ const SimpleTextOverlayPage: React.FC = () => {
 
     const isCompleted = exportState.status === 'completed';
 
-    const canExport = (videoFile || videoFileRef.current) && videoDimensions && settings.text.trim() && !isExporting;
+    // Can export when: video is loaded, dimensions known, at least one enabled layer has text, not currently exporting
+    const canExport = (videoFile || videoFileRef.current) &&
+        videoDimensions &&
+        settings.layers.some(l => l.enabled && l.text.trim()) &&
+        !isExporting;
 
     return (
         <div className="max-w-6xl mx-auto">

@@ -1,6 +1,6 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { FiMaximize, FiMinimize } from 'react-icons/fi';
-import type { TextOverlaySettings } from '@services/tyler/types';
+import type { TextOverlaySettings, TextLayer } from '@services/tyler/types';
 import { getCssFontFamily } from '@services/tyler/textUtils';
 
 interface VideoPreviewProps {
@@ -90,50 +90,56 @@ const VideoPreview: React.FC<VideoPreviewProps> = ({
 
         const resizeObserver = new ResizeObserver(updateDisplayedSize);
         resizeObserver.observe(video);
+
+        // Recalculate immediately and after a short delay for fullscreen transitions
         updateDisplayedSize();
+        const timeoutId = setTimeout(updateDisplayedSize, 100);
 
-        return () => resizeObserver.disconnect();
-    }, [videoDimensions]);
+        return () => {
+            resizeObserver.disconnect();
+            clearTimeout(timeoutId);
+        };
+    }, [videoDimensions, isFullscreen]);
 
-    // Calculate scaled font size to match FFmpeg output exactly
-    const getScaledFontSize = (): number => {
+    // Filter enabled layers with text, sort for z-order (body first, headline last)
+    const layersToRender = useMemo(() => {
+        return settings.layers
+            .filter(l => l.enabled && l.text.trim())
+            .sort((a, b) => a.id === 'body' ? -1 : 1);
+    }, [settings.layers]);
+
+    // Calculate scaled font size for a layer
+    const getScaledFontSize = (layer: TextLayer): number => {
         if (!videoDimensions || !displayedSize) {
-            return settings.fontSize * 0.3;
+            return layer.fontSize * 0.3;
         }
-        // Scale factor based on displayed width vs actual video width
         const scaleFactor = displayedSize.width / videoDimensions.width;
-        return settings.fontSize * scaleFactor;
+        return layer.fontSize * scaleFactor;
     };
 
     /**
-     * Calculate Y position in pixels to match FFmpeg EXACTLY
-     * CRITICAL: This formula MUST match getBaseYPosition in ffmpegService.ts
-     *
-     * Formula: yPosition = height * (yPositionPercent / 100) - totalTextHeight / 2
-     * Clamped to [0, height - totalTextHeight] to keep text fully visible
+     * Calculate Y position in pixels for a layer to match canvas export EXACTLY
+     * CRITICAL: This formula MUST match getYPosition in canvasExportService.ts
      */
-    const getYPosition = (): number => {
+    const getLayerYPosition = (layer: TextLayer): number => {
         if (!displayedSize || !videoDimensions) return 0;
 
         const scaleFactor = displayedSize.height / videoDimensions.height;
-        const scaledFontSize = settings.fontSize * scaleFactor;
+        const scaledFontSize = layer.fontSize * scaleFactor;
         const lineHeight = scaledFontSize * 1.3;
-        const lines = settings.text.split('\n').filter(line => line.trim());
+        const lines = layer.text.split('\n').filter(line => line.trim());
         const totalTextHeight = lines.length * lineHeight;
 
         // FORMULA: percentage of height, offset by half text height for centering
-        // 0% with clamp = top edge at top
-        // 50% = centered
-        // 100% with clamp = bottom edge at bottom
-        const yPosition = displayedSize.height * (settings.yPositionPercent / 100) - totalTextHeight / 2;
+        const yPosition = displayedSize.height * (layer.yPositionPercent / 100) - totalTextHeight / 2;
 
         // CLAMP to keep text fully visible
         return Math.max(0, Math.min(displayedSize.height - totalTextHeight, yPosition));
     };
 
-    // Get X position styles
-    const getXStyles = (): React.CSSProperties => {
-        switch (settings.alignment) {
+    // Get X position styles for a layer
+    const getXStyles = (layer: TextLayer): React.CSSProperties => {
+        switch (layer.alignment) {
             case 'left':
                 return { left: '5%', right: 'auto', textAlign: 'left' as const };
             case 'center':
@@ -142,11 +148,6 @@ const VideoPreview: React.FC<VideoPreviewProps> = ({
                 return { left: 'auto', right: '5%', textAlign: 'right' as const };
         }
     };
-
-    const scaledFontSize = getScaledFontSize();
-    const yPosition = getYPosition();
-    const xStyles = getXStyles();
-    const scaledShadow = Math.max(1, scaledFontSize * 0.04);
 
     // Container styles: for vertical videos, constrain width and center; for horizontal, use full width
     const containerStyle: React.CSSProperties = isFullscreen
@@ -192,17 +193,18 @@ const VideoPreview: React.FC<VideoPreviewProps> = ({
             <video
                 ref={videoRef}
                 src={videoUrl}
-                className={`${isFullscreen ? '' : 'w-full h-full object-cover'}`}
+                className={`${isFullscreen ? '' : 'w-full h-full object-cover'} [&::-webkit-media-controls-fullscreen-button]:hidden`}
                 style={videoStyle}
                 controls
+                controlsList="nofullscreen"
                 playsInline
                 muted
             />
 
-            {settings.text && displayedSize && (
+            {layersToRender.length > 0 && displayedSize && (
                 <div
                     ref={textOverlayRef}
-                    className="absolute pointer-events-none"
+                    className="absolute pointer-events-none z-[5]"
                     style={{
                         width: displayedSize.width,
                         height: displayedSize.height,
@@ -211,30 +213,40 @@ const VideoPreview: React.FC<VideoPreviewProps> = ({
                         transform: isFullscreen ? 'translate(-50%, -50%)' : 'none',
                     }}
                 >
-                    <div
-                        style={{
-                            position: 'absolute',
-                            top: yPosition,
-                            ...xStyles,
-                        }}
-                    >
-                        <span
-                            style={{
-                                fontFamily: getCssFontFamily(settings.fontName),
-                                color: settings.textColor,
-                                fontSize: `${scaledFontSize}px`,
-                                fontWeight: 'bold',
-                                textShadow: `${scaledShadow}px ${scaledShadow}px ${scaledShadow * 2}px rgba(0, 0, 0, 0.7)`,
-                                whiteSpace: 'pre-wrap',
-                                wordBreak: 'break-word',
-                                lineHeight: 1.3,
-                                display: 'block',
-                            }}
-                        >
-                            {/* CRITICAL: Filter empty lines to match FFmpeg behavior */}
-                            {settings.text.split('\n').filter(line => line.trim()).join('\n')}
-                        </span>
-                    </div>
+                    {layersToRender.map((layer) => {
+                        const scaledFontSize = getScaledFontSize(layer);
+                        const yPosition = getLayerYPosition(layer);
+                        const xStyles = getXStyles(layer);
+                        const scaledShadow = Math.max(1, scaledFontSize * 0.04);
+
+                        return (
+                            <div
+                                key={layer.id}
+                                style={{
+                                    position: 'absolute',
+                                    top: yPosition,
+                                    ...xStyles,
+                                }}
+                            >
+                                <span
+                                    style={{
+                                        fontFamily: getCssFontFamily(settings.fontName),
+                                        color: layer.textColor,
+                                        fontSize: `${scaledFontSize}px`,
+                                        fontWeight: 'bold',
+                                        textShadow: `${scaledShadow}px ${scaledShadow}px ${scaledShadow * 2}px rgba(0, 0, 0, 0.7)`,
+                                        whiteSpace: 'pre-wrap',
+                                        wordBreak: 'break-word',
+                                        lineHeight: 1.3,
+                                        display: 'block',
+                                    }}
+                                >
+                                    {/* CRITICAL: Filter empty lines to match canvas export behavior */}
+                                    {layer.text.split('\n').filter(line => line.trim()).join('\n')}
+                                </span>
+                            </div>
+                        );
+                    })}
                 </div>
             )}
 
