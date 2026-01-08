@@ -10,6 +10,7 @@ import type {
   SubmagicCreateProjectResponse,
   SubmagicProjectResponse,
 } from './types';
+import { MAX_TITLE_LENGTH } from './types';
 
 const SUBMAGIC_API_URL = import.meta.env.VITE_SUBMAGIC_API_URL || 'https://api.submagic.co/v1';
 const SUBMAGIC_API_KEY = import.meta.env.VITE_SUBMAGIC_API_KEY;
@@ -391,9 +392,14 @@ export const processVideo = async (
     processing_started_at: new Date().toISOString(),
   });
 
+  // Truncate title to prevent Submagic "title is too long" error
+  const truncatedTitle = options.title.length > MAX_TITLE_LENGTH
+    ? options.title.substring(0, MAX_TITLE_LENGTH).trim()
+    : options.title;
+
   // Build base request
   const request: SubmagicCreateProjectRequest = {
-    title: options.title,
+    title: truncatedTitle,
     videoUrl: signedUrl,
     templateName: options.templateName,
     language: options.language,

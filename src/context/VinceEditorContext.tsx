@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 import type { UploadState, ProcessingState } from '@services/vince/types';
+import { MAX_TITLE_LENGTH } from '@services/vince/types';
 
 /**
  * VinceEditorContext - Persists Vince editor state across in-app navigation
@@ -53,14 +54,21 @@ export const VinceEditorProvider: React.FC<{ children: ReactNode }> = ({ childre
   const [editorState, setEditorState] = useState<VinceEditorState>(defaultState);
 
   const setSelectedFile = useCallback((file: File | null) => {
-    setEditorState((prev) => ({
-      ...prev,
-      selectedFile: file,
-      // Auto-fill title when file is selected
-      videoTitle: file
-        ? file.name.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ')
-        : prev.videoTitle,
-    }));
+    setEditorState((prev) => {
+      // Auto-fill title when file is selected, truncated to max length
+      let title = prev.videoTitle;
+      if (file) {
+        title = file.name.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ');
+        if (title.length > MAX_TITLE_LENGTH) {
+          title = title.substring(0, MAX_TITLE_LENGTH).trim();
+        }
+      }
+      return {
+        ...prev,
+        selectedFile: file,
+        videoTitle: title,
+      };
+    });
   }, []);
 
   const setVideoTitle = useCallback((title: string) => {

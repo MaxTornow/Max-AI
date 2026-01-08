@@ -151,6 +151,9 @@ export const ACCEPTED_VIDEO_TYPES = {
 /** Maximum file size (2GB in bytes) */
 export const MAX_FILE_SIZE = 2147483648;
 
+/** Maximum title length for Submagic API (prevents "title is too long" error) */
+export const MAX_TITLE_LENGTH = 100;
+
 /** Supported language options */
 export const SUPPORTED_LANGUAGES = [
   { code: 'en', label: 'English' },
