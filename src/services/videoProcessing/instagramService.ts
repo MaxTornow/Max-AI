@@ -112,74 +112,42 @@ export const getInstagramVideoInfo = async (url: string): Promise<InstagramVideo
 
 /**
  * Downloads an Instagram video from the provided URL
- * Uses Netlify proxy to avoid CORS issues (COEP headers block direct cross-origin fetches)
  * @param {string} downloadUrl - The URL to download the video from
  * @returns {Promise<ArrayBuffer>} The video data as an ArrayBuffer
  */
 export const downloadInstagramVideo = async (downloadUrl: string): Promise<ArrayBuffer> => {
   console.log('[DEBUG] downloadInstagramVideo - Starting with URL:', downloadUrl.substring(0, 50) + '...');
   try {
-    console.log('[DEBUG] downloadInstagramVideo - Downloading Instagram video via proxy...');
-
     const startTime = Date.now();
 
-    // Must use proxy due to COEP headers blocking cross-origin fetches
-    // (Required for ffmpeg.wasm SharedArrayBuffer support)
-    const proxyUrl = `/api/video-proxy?url=${encodeURIComponent(downloadUrl)}`;
-    console.log('[DEBUG] downloadInstagramVideo - Using proxy URL');
-
-    const response = await fetch(proxyUrl, {
+    // Direct fetch to Instagram CDN
+    const response = await fetch(downloadUrl, {
       method: 'GET',
     });
 
     console.log('[DEBUG] downloadInstagramVideo - Response status:', response.status, response.statusText);
 
-    // Handle 413 - video too large for Netlify proxy (4.5MB limit)
-    if (response.status === 413) {
-      const errorData = await response.json().catch(() => ({}));
-      const sizeMB = errorData.size ? (errorData.size / 1024 / 1024).toFixed(1) : 'unknown';
-      console.error(`[DEBUG] downloadInstagramVideo - Video too large: ${sizeMB}MB (max 4.5MB)`);
-      throw new Error(`This video is too large (${sizeMB}MB). Please try a shorter video under 4.5MB.`);
-    }
-
     if (!response.ok) {
-      const errorText = await response.text().catch(() => 'Could not read error response');
-      console.error(`[DEBUG] downloadInstagramVideo - Failed with status ${response.status}: ${errorText}`);
       throw new Error(`Failed to download Instagram video: ${response.status} ${response.statusText}`);
     }
 
-    console.log('[DEBUG] downloadInstagramVideo - Getting response as ArrayBuffer...');
     const videoData = await response.arrayBuffer();
 
-    // Validate video data
     if (!videoData || videoData.byteLength === 0) {
-      console.error('[DEBUG] downloadInstagramVideo - Received empty video data');
       throw new Error('Received empty video data from Instagram');
     }
 
     const downloadTime = Date.now() - startTime;
-
     console.log('[DEBUG] downloadInstagramVideo - Download successful!');
     console.log('[DEBUG] downloadInstagramVideo - Video size:', (videoData.byteLength / 1024 / 1024).toFixed(2), 'MB');
     console.log('[DEBUG] downloadInstagramVideo - Download time:', downloadTime / 1000, 'seconds');
 
     return videoData;
   } catch (error) {
-    const errorDetails = {
-      message: error instanceof Error ? error.message : 'Unknown error',
-      name: error instanceof Error ? error.name : 'Unknown',
-      stack: error instanceof Error ? error.stack : undefined,
-      type: error instanceof Error ? error.constructor.name : typeof error,
-      url: downloadUrl.substring(0, 50) + '...'
-    };
-
-    console.error('[DEBUG] downloadInstagramVideo - Error details:', JSON.stringify(errorDetails, null, 2));
-    console.error('Error downloading Instagram video:', errorDetails);
-
+    console.error('[DEBUG] downloadInstagramVideo - Error:', error);
     if (error instanceof Error) {
       throw error;
-    } else {
-      throw new Error('Failed to download Instagram video. Please check your internet connection and try again.');
     }
+    throw new Error('Failed to download Instagram video. Please try again.');
   }
 };
