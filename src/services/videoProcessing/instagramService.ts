@@ -41,12 +41,21 @@ const mapFastSaverResponse = (response: FastSaverResponse): InstagramVideoInfo =
 });
 
 /**
+ * Normalize Instagram URLs - convert /p/ to /reel/ format
+ * Both formats point to the same content but FastSaver handles /reel/ better
+ */
+const normalizeInstagramUrl = (url: string): string => {
+  return url.replace('/p/', '/reel/');
+};
+
+/**
  * Fetches information about an Instagram video
  * @param {string} url - The Instagram video URL
  * @returns {Promise<InstagramVideoInfo>} Video information including download URL
  */
 export const getInstagramVideoInfo = async (url: string): Promise<InstagramVideoInfo> => {
-  console.log('[DEBUG] getInstagramVideoInfo - Starting with URL:', url);
+  const normalizedUrl = normalizeInstagramUrl(url);
+  console.log('[DEBUG] getInstagramVideoInfo - Starting with URL:', normalizedUrl);
 
   // Validate API key is configured
   if (!API_KEYS.FASTSAVER) {
@@ -55,10 +64,10 @@ export const getInstagramVideoInfo = async (url: string): Promise<InstagramVideo
   }
 
   try {
-    console.log('[DEBUG] getInstagramVideoInfo - Fetching Instagram video info for:', url);
+    console.log('[DEBUG] getInstagramVideoInfo - Fetching Instagram video info for:', normalizedUrl);
 
     // NEW: Using /fetch endpoint, auth handled by proxy via X-Api-Key header
-    const apiUrl = `/api/fastsaver/fetch?url=${encodeURIComponent(url)}`;
+    const apiUrl = `/api/fastsaver/fetch?url=${encodeURIComponent(normalizedUrl)}`;
     console.log('[DEBUG] getInstagramVideoInfo - API URL:', apiUrl);
 
     console.log('[DEBUG] getInstagramVideoInfo - Making API request...');
