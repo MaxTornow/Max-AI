@@ -72,7 +72,7 @@ interface PersistedState {
 }
 
 /**
- * TOBY - Text Overlays By You
+ * Simple Clip/Text Editor
  * Browser-based video text overlay with ffmpeg.wasm
  * Export state is managed globally via ExportContext
  */
@@ -252,11 +252,8 @@ const SimpleTextOverlayPage: React.FC = () => {
             {/* Header */}
             <div className="mb-6">
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                    TOBY
+                    Simple Clip/Text Editor
                 </h1>
-                <p className="text-gray-500 dark:text-gray-400 mt-1">
-                    Text Overlays By You
-                </p>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

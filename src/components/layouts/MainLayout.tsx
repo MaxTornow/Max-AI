@@ -63,7 +63,7 @@ const MainLayout: React.FC = () => {
     { path: '/aimax', label: 'AI Max Viral Coach', icon: <FiAward size={20} /> },
     { path: '/sage', label: 'Script Feedback AI', icon: <FiCheckCircle size={20} /> },
     { path: '/vince', label: 'AI Video Editor', icon: <FiFilm size={20} /> },
-    { path: '/tyler', label: 'Text Overlay Editor', icon: <FiFilm size={20} /> },
+    { path: '/tyler', label: 'Simple Clip/Text Editor', icon: <FiFilm size={20} /> },
     { path: '/my-styles', label: 'My Styles', icon: <FiList size={20} /> },
     { type: 'separator' },
     { path: '/lara', label: 'LinkedIn Rewriting AI', icon: <FiMessageSquare size={20} /> },
