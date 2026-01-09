@@ -587,7 +587,7 @@ const CreateRewrite: React.FC = () => {
 
   return (
     <div className="container mx-auto px-4 py-6">
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">VERA - Viral Enhanced Rewrite Automator</h1>
+      <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Script Rewriting AI</h1>
       
       {/* Step 1: Video Input */}
       <div className="mb-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden">

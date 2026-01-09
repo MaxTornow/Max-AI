@@ -130,7 +130,7 @@ const AllRewrites: React.FC = () => {
       ) : rewrites.length === 0 ? (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
           <p className="text-center py-8 text-gray-500 dark:text-gray-400">
-            You don't have any saved rewrites yet. Create a rewrite in the VERA section to get started.
+            You don't have any saved rewrites yet. Create a rewrite in the Script Rewriting AI section to get started.
           </p>
           <div className="text-center">
             <Link 

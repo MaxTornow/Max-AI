@@ -59,7 +59,7 @@ const MainLayout: React.FC = () => {
   const navItems: NavItem[] = [
     { path: '/', label: 'Dashboard', icon: <FiHome size={20} /> },
     { path: '/ava', label: 'Ideas & Scripting AI', icon: <FiMessageSquare size={20} /> },
-    { path: '/create-rewrite', label: 'VERA - Rewriting AI', icon: <FiCopy size={20} /> },
+    { path: '/create-rewrite', label: 'Script Rewriting AI', icon: <FiCopy size={20} /> },
     { path: '/aimax', label: 'AI Max Viral Coach', icon: <FiAward size={20} /> },
     { path: '/sage', label: 'Script Feedback AI', icon: <FiCheckCircle size={20} /> },
     { path: '/vince', label: 'AI Video Editor', icon: <FiFilm size={20} /> },
