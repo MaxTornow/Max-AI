@@ -118,12 +118,17 @@ export const uploadVideoToStorage = async (
     onProgress(10);
   }
 
+  // Convert File to Blob with correct MIME type
+  // Safari/iOS reports .MOV files as application/octet-stream which Supabase rejects
+  const fileBuffer = await file.arrayBuffer();
+  const blob = new Blob([fileBuffer], { type: contentType });
+
   const { data, error } = await supabase.storage
     .from('videos')
-    .upload(path, file, {
+    .upload(path, blob, {
       cacheControl: '3600',
       upsert: false,
-      contentType, // Explicitly set MIME type to avoid browser detection issues
+      contentType,
     });
 
   if (error) {
