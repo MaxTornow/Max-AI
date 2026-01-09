@@ -133,6 +133,42 @@ export const downloadInstagramVideo = async (downloadUrl: string): Promise<Array
     console.log('[DEBUG] downloadInstagramVideo - Response status:', response.status, response.statusText);
     console.log('[DEBUG] downloadInstagramVideo - Response headers:', JSON.stringify(Object.fromEntries([...response.headers])));
 
+    // Handle 413 (video too large for proxy) - try direct fetch
+    if (response.status === 413) {
+      console.log('[DEBUG] downloadInstagramVideo - Video too large for proxy, trying direct fetch...');
+      try {
+        const errorData = await response.json();
+        const directUrl = errorData.directUrl || downloadUrl;
+        const videoSize = errorData.size || 'unknown';
+        console.log(`[DEBUG] downloadInstagramVideo - Video size: ${(Number(videoSize) / 1024 / 1024).toFixed(2)} MB, attempting direct fetch...`);
+
+        // Try direct fetch from Instagram CDN (may work for some videos)
+        const directResponse = await fetch(directUrl, {
+          method: 'GET',
+          mode: 'cors',
+          headers: {
+            'Accept': '*/*',
+          }
+        });
+
+        if (directResponse.ok) {
+          console.log('[DEBUG] downloadInstagramVideo - Direct fetch successful!');
+          const videoData = await directResponse.arrayBuffer();
+          const downloadTime = Date.now() - startTime;
+          console.log('[DEBUG] downloadInstagramVideo - Video size:', (videoData.byteLength / 1024 / 1024).toFixed(2), 'MB');
+          console.log('[DEBUG] downloadInstagramVideo - Download time:', downloadTime / 1000, 'seconds');
+          return videoData;
+        } else {
+          console.error('[DEBUG] downloadInstagramVideo - Direct fetch failed:', directResponse.status);
+          throw new Error(`Video is too large (${(Number(videoSize) / 1024 / 1024).toFixed(1)} MB). Please try a shorter video.`);
+        }
+      } catch (directError) {
+        console.error('[DEBUG] downloadInstagramVideo - Direct fetch error:', directError);
+        // If direct fetch fails (likely CORS), provide helpful error message
+        throw new Error('Video is too large for our servers. Please try a shorter video (under 45 seconds usually works).');
+      }
+    }
+
     if (!response.ok) {
       const errorText = await response.text().catch(() => 'Could not read error response');
       console.error(`[DEBUG] downloadInstagramVideo - Failed with status ${response.status}: ${errorText}`);
