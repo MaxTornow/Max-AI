@@ -9,13 +9,12 @@
     Cross-Origin-Opener-Policy = "same-origin"
     Cross-Origin-Embedder-Policy = "require-corp"
 
-# Proxy for FastSaver API
+# FastSaver API via Netlify Function (requires API key from env)
 [[redirects]]
-  from = "/api/fastsaver/*"
-  to = "https://fastsaverapi.com/:splat"
+  from = "/api/fastsaver/fetch"
+  to = "/.netlify/functions/fastsaver-fetch"
   status = 200
   force = true
-  headers = {Accept = "application/json"}
 
 # Proxy for video downloads to handle HTTP/HTTPS mixed content
 [[redirects]]
