@@ -168,4 +168,5 @@ export const SUPPORTED_LANGUAGES = [
   { code: 'ja', label: 'Japanese' },
   { code: 'ko', label: 'Korean' },
   { code: 'zh', label: 'Chinese' },
+  { code: 'sv', label: 'Swedish' },
 ] as const;
