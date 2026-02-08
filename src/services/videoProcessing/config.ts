@@ -37,7 +37,7 @@ export const TIKTOK_CONFIG = {
 
 // AssemblyAI configuration
 export const ASSEMBLY_AI_CONFIG = {
-  UPLOAD_TIMEOUT_MS: 60000, // 1 minute for uploads
+  UPLOAD_TIMEOUT_MS: 120000, // 2 minutes for uploads (increased for slow connections)
   TRANSCRIPTION_TIMEOUT_MS: 120000, // 2 minutes for transcription requests
   MAX_RETRIES: 3,
   RETRY_DELAY_MS: 1000,

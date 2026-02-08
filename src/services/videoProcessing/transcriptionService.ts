@@ -5,7 +5,7 @@
 
 import { TranscriptionResponse } from './types';
 
-import { API_KEYS } from './config';
+import { API_KEYS, ASSEMBLY_AI_CONFIG } from './config';
 
 /**
  * Uploads a video file to AssemblyAI for processing
@@ -23,7 +23,7 @@ export const uploadVideoToAssemblyAI = async (videoData: ArrayBuffer): Promise<s
     
     // Create controller for timeout handling
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
+    const timeoutId = setTimeout(() => controller.abort(), ASSEMBLY_AI_CONFIG.UPLOAD_TIMEOUT_MS); // Use config timeout
     
     try {
       const response = await fetch('https://api.assemblyai.com/v2/upload', {
@@ -86,7 +86,7 @@ export const uploadVideoToAssemblyAI = async (videoData: ArrayBuffer): Promise<s
       // Analyze the fetch error to provide more specific diagnostics
       if (fetchError.name === 'AbortError') {
         console.error('REQUEST TIMEOUT - The upload to AssemblyAI took too long to complete');
-        throw new Error('TIMEOUT: AssemblyAI upload request timed out after 60 seconds');
+        throw new Error(`TIMEOUT: AssemblyAI upload request timed out after ${ASSEMBLY_AI_CONFIG.UPLOAD_TIMEOUT_MS / 1000} seconds`);
       } else if (fetchError.message?.includes('NetworkError') || fetchError.message?.includes('network')) {
         console.error('NETWORK ERROR - There was a problem with the network connection to AssemblyAI');
         throw new Error(`NETWORK_ERROR: Network error during AssemblyAI upload: ${fetchError.message}`);
