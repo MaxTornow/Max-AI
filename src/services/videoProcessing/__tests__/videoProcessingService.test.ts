@@ -103,11 +103,12 @@ describe('Video Processing Service', () => {
       expect(getInstagramVideoInfo).toHaveBeenCalledWith(instagramRequest.videoDetails.url);
       expect(downloadInstagramVideo).toHaveBeenCalledWith('https://example.com/video.mp4');
       expect(uploadVideoToAssemblyAI).toHaveBeenCalledWith(mockVideoData);
-      expect(submitTranscriptionRequest).toHaveBeenCalledWith('https://example.com/upload');
+      expect(submitTranscriptionRequest).toHaveBeenCalledWith('https://example.com/upload', undefined);
       expect(pollForTranscriptionCompletion).toHaveBeenCalledWith('transcription-id');
       expect(generateScripts).toHaveBeenCalledWith(
         mockTranscription.text,
         instagramRequest.storyDetails,
+        undefined,
         undefined,
         undefined
       );
@@ -149,13 +150,12 @@ describe('Video Processing Service', () => {
 
       // Verify
       expect(getTikTokVideoInfo).toHaveBeenCalledWith(tiktokRequest.videoDetails.url);
-      expect(downloadTikTokVideo).toHaveBeenCalledWith('https://example.com/tiktok.mp4');
-      expect(uploadVideoToAssemblyAI).toHaveBeenCalledWith(mockVideoData);
-      expect(submitTranscriptionRequest).toHaveBeenCalledWith('https://example.com/upload');
+      expect(submitTranscriptionRequest).toHaveBeenCalledWith('https://example.com/tiktok.mp4', undefined);
       expect(pollForTranscriptionCompletion).toHaveBeenCalledWith('transcription-id');
       expect(generateScripts).toHaveBeenCalledWith(
         mockTranscription.text,
         tiktokRequest.storyDetails,
+        undefined,
         undefined,
         undefined
       );
@@ -179,6 +179,29 @@ describe('Video Processing Service', () => {
 
       // Execute and expect rejection
       await expect(processVideo(tiktokRequest)).rejects.toThrow('Failed to fetch TikTok video');
+    });
+
+    test('when request.language = "de" — submitTranscriptionRequest is called with "de"', async () => {
+      (getTikTokVideoInfo as jest.MockedFunction<typeof getTikTokVideoInfo>).mockResolvedValue({ download_url: 'https://example.com/tiktok.mp4' } as InstagramVideoInfo);
+      (submitTranscriptionRequest as jest.MockedFunction<typeof submitTranscriptionRequest>).mockResolvedValue('transcription-id');
+      (pollForTranscriptionCompletion as jest.MockedFunction<typeof pollForTranscriptionCompletion>).mockResolvedValue(mockTranscription as TranscriptionResponse);
+      (generateScripts as jest.MockedFunction<typeof generateScripts>).mockResolvedValue(mockScripts as ScriptGenerationResponse);
+
+      const requestWithLanguage = { ...tiktokRequest, language: 'de' };
+      await processVideo(requestWithLanguage);
+
+      expect(submitTranscriptionRequest).toHaveBeenCalledWith('https://example.com/tiktok.mp4', 'de');
+    });
+
+    test('when request.language is absent — submitTranscriptionRequest is called with undefined', async () => {
+      (getTikTokVideoInfo as jest.MockedFunction<typeof getTikTokVideoInfo>).mockResolvedValue({ download_url: 'https://example.com/tiktok.mp4' } as InstagramVideoInfo);
+      (submitTranscriptionRequest as jest.MockedFunction<typeof submitTranscriptionRequest>).mockResolvedValue('transcription-id');
+      (pollForTranscriptionCompletion as jest.MockedFunction<typeof pollForTranscriptionCompletion>).mockResolvedValue(mockTranscription as TranscriptionResponse);
+      (generateScripts as jest.MockedFunction<typeof generateScripts>).mockResolvedValue(mockScripts as ScriptGenerationResponse);
+
+      await processVideo(tiktokRequest);
+
+      expect(submitTranscriptionRequest).toHaveBeenCalledWith('https://example.com/tiktok.mp4', undefined);
     });
   });
 

@@ -9,6 +9,13 @@
   status = 200
   force = true
 
+# TikWM API proxy for TikTok video info (returns accessible CDN URLs)
+[[redirects]]
+  from = "/api/tikwm"
+  to = "/.netlify/functions/tikwm-fetch"
+  status = 200
+  force = true
+
 # Proxy for video downloads to handle HTTP/HTTPS mixed content
 [[redirects]]
   from = "/api/video-proxy/*"

@@ -8,6 +8,7 @@
 import React, { useState, useEffect } from 'react';
 import useVideoProcessing from '../../hooks/useVideoProcessing';
 import { VideoProcessingRequest } from '../../services/videoProcessing';
+import { SUPPORTED_LANGUAGES } from '../../services/vince/types';
 
 /**
  * Props for the VideoProcessingForm component
@@ -45,6 +46,7 @@ const VideoProcessingForm: React.FC<VideoProcessingFormProps> = ({ onProcessingC
       console.log('Invalid URL format');
     }
   }, [videoUrl]);
+  const [language, setLanguage] = useState('auto');
   const [niche, setNiche] = useState('');
   const [targetAudience, setTargetAudience] = useState('');
   const [painPoints, setPainPoints] = useState('');
@@ -81,7 +83,8 @@ const VideoProcessingForm: React.FC<VideoProcessingFormProps> = ({ onProcessingC
         communicationStyle,
         heroStory: heroStory || undefined
       },
-      systemPrompt: systemPrompt || undefined
+      systemPrompt: systemPrompt || undefined,
+      language: language === 'auto' ? undefined : language
     };
     
     try {
@@ -104,6 +107,7 @@ const VideoProcessingForm: React.FC<VideoProcessingFormProps> = ({ onProcessingC
   const handleReset = () => {
     setVideoUrl('');
     setPlatform('instagram');
+    setLanguage('auto');
     setNiche('');
     setTargetAudience('');
     setPainPoints('');
@@ -210,6 +214,23 @@ const VideoProcessingForm: React.FC<VideoProcessingFormProps> = ({ onProcessingC
             </select>
           </div>
           
+          <div className="mb-4">
+            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="language">
+              Video Language
+            </label>
+            <select
+              id="language"
+              value={language}
+              onChange={(e) => setLanguage(e.target.value)}
+              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+            >
+              <option value="auto">Auto-detect (recommended)</option>
+              {SUPPORTED_LANGUAGES.map(({ code, label }) => (
+                <option key={code} value={code}>{label}</option>
+              ))}
+            </select>
+          </div>
+
           <div className="mb-4">
             <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="niche">
               Niche

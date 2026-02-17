@@ -39,6 +39,11 @@ exports.handler = async (event, context) => {
 
     console.log('Proxying video URL:', videoUrl.substring(0, 100) + '...');
 
+    // Set referer based on the video source domain
+    const isTikWM = videoUrl.includes('tikwm.com');
+    const isTikTok = videoUrl.includes('tiktok') || videoUrl.includes('tiktokv.com') || videoUrl.includes('tiktokcdn.com');
+    const referer = isTikWM ? 'https://tikwm.com/' : isTikTok ? 'https://www.tiktok.com/' : 'https://www.instagram.com/';
+
     // Fetch the video from the original URL
     const response = await fetch(videoUrl, {
       method: 'GET',
@@ -46,7 +51,7 @@ exports.handler = async (event, context) => {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': '*/*',
         'Accept-Encoding': 'identity', // Don't ask for compressed response
-        'Referer': 'https://www.instagram.com/'
+        'Referer': referer
       }
     });
 

@@ -130,19 +130,27 @@ export const uploadVideoToAssemblyAI = async (videoData: ArrayBuffer): Promise<s
 /**
  * Submits a transcription request to AssemblyAI
  * @param {string} audioUrl - The URL of the uploaded audio/video
+ * @param {string} [language] - BCP-47 language code (e.g. 'de'). Omit or pass 'auto' for auto-detection.
  * @returns {Promise<string>} The transcription ID
  */
-export const submitTranscriptionRequest = async (audioUrl: string): Promise<string> => {
+export const submitTranscriptionRequest = async (audioUrl: string, language?: string): Promise<string> => {
   try {
     console.log('Submitting transcription request for:', audioUrl);
-    
+
+    const body: Record<string, unknown> = { audio_url: audioUrl };
+    if (!language || language === 'auto') {
+      body.language_detection = true;
+    } else {
+      body.language_code = language;
+    }
+
     const response = await fetch('https://api.assemblyai.com/v2/transcript', {
       method: 'POST',
       headers: {
         'Authorization': API_KEYS.ASSEMBLY_AI,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ audio_url: audioUrl }),
+      body: JSON.stringify(body),
     });
 
     if (!response.ok) {

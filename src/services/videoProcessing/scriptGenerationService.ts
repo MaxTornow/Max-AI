@@ -18,7 +18,8 @@ export const generateScripts = async (
   transcription: string,
   storyDetails: StoryDetails,
   systemPrompt?: string,
-  apiKey?: string
+  apiKey?: string,
+  language?: string
 ): Promise<ScriptGenerationResponse> => {
   try {
     console.log('Generating scripts for transcription:', transcription.substring(0, 50) + '...');
@@ -38,10 +39,24 @@ export const generateScripts = async (
     console.log('[DEBUG] Using Claude API key:', maskedKey);
     console.log('[DEBUG] Using model:', CLAUDE_CONFIG.MODEL);
     
+    const languageNames: Record<string, string> = {
+      en: 'English', es: 'Spanish', fr: 'French', de: 'German', it: 'Italian',
+      pt: 'Portuguese', nl: 'Dutch', pl: 'Polish', ru: 'Russian', ja: 'Japanese',
+      ko: 'Korean', zh: 'Chinese', ar: 'Arabic', hi: 'Hindi', sv: 'Swedish',
+      da: 'Danish', no: 'Norwegian', fi: 'Finnish', tr: 'Turkish', cs: 'Czech',
+      ro: 'Romanian', hu: 'Hungarian', uk: 'Ukrainian', id: 'Indonesian'
+    };
+    const languageName = language && language !== 'auto'
+      ? (languageNames[language] || language)
+      : null;
+    const languageContext = languageName
+      ? `The original video is in ${languageName}. Write all three scripts in ${languageName}.\n`
+      : 'Write all three scripts in the same language as the transcription.\n';
+
     const prompt = `## Role:
 You are a master content marketer specializing in video script creation. Your expertise lies in adapting existing content while maintaining its original structure and authenticity.
 
-## Task:
+${languageContext}## Task:
 Create three video scripts based on the provided transcription, adapting the content for the specified niche and target audience while preserving the original transcript's structure, flow, and elements exactly as they appear.
 
 ## Context:

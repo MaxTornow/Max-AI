@@ -10,7 +10,7 @@ import {
   ProcessingStatus
 } from './types';
 import { getInstagramVideoInfo, downloadInstagramVideo } from './instagramService';
-import { getTikTokVideoInfo, downloadTikTokVideo } from './tiktokService';
+import { getTikTokVideoInfo } from './tiktokService';
 import { 
   uploadVideoToAssemblyAI, 
   submitTranscriptionRequest, 
@@ -57,24 +57,25 @@ export const processInstagramVideoWithStatus = async (
     
     // Step 4: Submit transcription request
     update('transcribing_video', 40, 'Starting video transcription...', 60); // Estimate 60 seconds
-    const transcriptionId = await submitTranscriptionRequest(uploadUrl);
-    
+    const transcriptionId = await submitTranscriptionRequest(uploadUrl, request.language);
+
     // Step 5: Poll for transcription completion
     update('transcribing_video', 50, 'Transcribing video content...', 45); // Updated estimate
     const transcription = await pollForTranscriptionCompletion(transcriptionId);
-    
+
     if (!transcription.text) {
       update('error', 0, 'Transcription completed but no text was generated');
       throw new Error('Transcription completed but no text was generated');
     }
-    
+
     // Step 6: Generate scripts using Claude AI
     update('generating_scripts', 70, 'Generating script variations...', 30);
     const scripts = await generateScripts(
       transcription.text,
       request.storyDetails,
       request.systemPrompt,
-      request.apiKey
+      request.apiKey,
+      request.language
     );
     
     // Complete
@@ -125,38 +126,33 @@ export const processTikTokVideoWithStatus = async (
     // Default no-op update function if none provided
     const update = updateStatus || (() => {});
     
-    // Step 1: Get video info from TikTok
+    // Step 1: Get video info from TikTok (returns a tikwm.com CDN URL, publicly accessible)
     update('fetching_video_info', 10, 'Fetching video information from TikTok...');
     const videoInfo = await getTikTokVideoInfo(request.videoDetails.url);
-    
-    // Step 2: Download the video
-    update('downloading_video', 20, 'Downloading video from TikTok...');
-    const videoData = await downloadTikTokVideo(videoInfo.download_url);
-    
-    // Step 3: Upload the video to AssemblyAI
-    update('uploading_to_transcription_service', 30, 'Uploading video to transcription service...');
-    const uploadUrl = await uploadVideoToAssemblyAI(videoData);
-    
-    // Step 4: Submit transcription request
-    update('transcribing_video', 40, 'Starting video transcription...', 60); // Estimate 60 seconds
-    const transcriptionId = await submitTranscriptionRequest(uploadUrl);
-    
+
+    // Step 2: Submit URL directly to AssemblyAI — tikwm.com CDN URLs are publicly
+    // accessible so AssemblyAI can fetch the video itself. This avoids downloading
+    // the file through our server, which fails for IP-locked TikTok CDN URLs.
+    update('uploading_to_transcription_service', 30, 'Submitting video to transcription service...');
+    const transcriptionId = await submitTranscriptionRequest(videoInfo.download_url, request.language);
+
     // Step 5: Poll for transcription completion
     update('transcribing_video', 50, 'Transcribing video content...', 45); // Updated estimate
     const transcription = await pollForTranscriptionCompletion(transcriptionId);
-    
+
     if (!transcription.text) {
       update('error', 0, 'Transcription completed but no text was generated');
       throw new Error('Transcription completed but no text was generated');
     }
-    
+
     // Step 6: Generate scripts using Claude AI
     update('generating_scripts', 70, 'Generating script variations...', 30);
     const scripts = await generateScripts(
       transcription.text,
       request.storyDetails,
       request.systemPrompt,
-      request.apiKey
+      request.apiKey,
+      request.language
     );
     
     // Complete

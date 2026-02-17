@@ -20,6 +20,7 @@ export interface VideoProcessingRequest {
   storyDetails: StoryDetails;
   systemPrompt?: string;
   apiKey?: string;
+  language?: string; // BCP-47 code e.g. 'de', or undefined = auto-detect
 }
 
 export interface InstagramVideoInfo {

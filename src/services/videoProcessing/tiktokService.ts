@@ -5,69 +5,69 @@
 
 import { InstagramVideoInfo } from './types';
 
-// TikTok API token from environment variables
-const TIKTOK_API_TOKEN = import.meta.env.VITE_TIKTOK_API_TOKEN || 'default_token';
+interface TikWMResponse {
+  code: number;
+  msg: string;
+  data: {
+    id: string;
+    title: string;
+    play: string;       // standard quality, no watermark
+    hdplay: string;     // HD quality, no watermark
+    wmplay: string;     // watermarked
+    cover: string;
+    duration: number;
+    width: number;
+    height: number;
+  };
+}
 
 /**
- * Fetches information about a TikTok video
+ * Fetches information about a TikTok video using tikwm.com API.
+ * Returns a tikwm.com CDN URL that is publicly accessible (no IP locking).
  * @param {string} url - The TikTok video URL
  * @returns {Promise<InstagramVideoInfo>} Video information including download URL
  */
 export const getTikTokVideoInfo = async (url: string): Promise<InstagramVideoInfo> => {
+  console.log('[DEBUG] getTikTokVideoInfo - Starting with URL:', url);
+
   try {
-    console.log('Fetching TikTok video info for:', url);
-    
-    // TikTok videos can also be fetched using the FastSaver API
-    const apiUrl = `/api/fastsaver/get-info?url=${encodeURIComponent(url)}&token=${TIKTOK_API_TOKEN}`;
-    
+    const apiUrl = `/api/tikwm?url=${encodeURIComponent(url)}`;
+    console.log('[DEBUG] getTikTokVideoInfo - API URL:', apiUrl);
+
     const response = await fetch(apiUrl, {
       method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-      },
+      headers: { 'Accept': 'application/json' },
     });
+
+    console.log('[DEBUG] getTikTokVideoInfo - Response status:', response.status, response.statusText);
 
     if (!response.ok) {
       throw new Error(`Failed to fetch TikTok video info: ${response.status} ${response.statusText}`);
     }
 
-    const data = await response.json();
-    
-    // Validate the response data
-    if (!data || !data.download_url) {
-      throw new Error('Invalid response from FastSaver API: Missing download URL');
+    const data: TikWMResponse = await response.json();
+    console.log('[DEBUG] getTikTokVideoInfo - Response data:', JSON.stringify(data, null, 2));
+
+    if (!data || data.code !== 0 || !data.data?.play) {
+      throw new Error(`tikwm.com API error: ${data?.msg || 'Missing video URL'}`);
     }
-    
-    return data as InstagramVideoInfo;
+
+    // Prefer hdplay (higher quality) for better transcription, fall back to play
+    const videoUrl = data.data.hdplay || data.data.play;
+
+    return {
+      error: false,
+      hosting: 'tiktok',
+      shortcode: data.data.id,
+      download_url: videoUrl,
+      thumbnail: data.data.cover,
+      caption: data.data.title || '',
+      duration: data.data.duration,
+      width: data.data.width,
+      height: data.data.height,
+    };
   } catch (error) {
-    console.error('Error fetching TikTok video info:', error);
+    console.error('[DEBUG] getTikTokVideoInfo - Error:', error);
     throw new Error('Failed to fetch TikTok video info. Please check the URL and try again.');
-  }
-};
-
-/**
- * Downloads a TikTok video from the provided URL
- * @param {string} downloadUrl - The URL to download the video from
- * @returns {Promise<ArrayBuffer>} The video data as an ArrayBuffer
- */
-export const downloadTikTokVideo = async (downloadUrl: string): Promise<ArrayBuffer> => {
-  try {
-    console.log('Downloading TikTok video from:', downloadUrl);
-    
-    // Use the video proxy to handle HTTP/HTTPS mixed content issues in production
-    const proxyUrl = `/api/video-proxy/${encodeURIComponent(downloadUrl)}`;
-    
-    const response = await fetch(proxyUrl, {
-      method: 'GET',
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to download TikTok video: ${response.status} ${response.statusText}`);
-    }
-
-    return await response.arrayBuffer();
-  } catch (error) {
-    console.error('Error downloading TikTok video:', error);
-    throw new Error('Failed to download TikTok video. Please check your internet connection and try again.');
   }
 };

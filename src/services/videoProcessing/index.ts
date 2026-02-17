@@ -14,9 +14,8 @@ export {
   downloadInstagramVideo 
 } from './instagramService';
 
-export { 
-  getTikTokVideoInfo, 
-  downloadTikTokVideo 
+export {
+  getTikTokVideoInfo
 } from './tiktokService';
 
 export {

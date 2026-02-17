@@ -46,13 +46,15 @@ export default defineConfig(({ mode }) => {
               if (videoUrl) {
                 try {
                   const parsed = new URL(videoUrl);
-                  // Set headers that Instagram CDN expects
+                  const isTikTok = parsed.hostname.includes('tiktok') || parsed.hostname.includes('musical.ly') || parsed.hostname.includes('tikwm');
+                  const referer = isTikTok ? 'https://www.tiktok.com/' : 'https://www.instagram.com/';
+                  const origin = isTikTok ? 'https://www.tiktok.com' : 'https://www.instagram.com';
                   proxyReq.setHeader('Host', parsed.hostname);
                   proxyReq.setHeader('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
-                  proxyReq.setHeader('Referer', 'https://www.instagram.com/');
+                  proxyReq.setHeader('Referer', referer);
                   proxyReq.setHeader('Accept', '*/*');
                   proxyReq.setHeader('Accept-Language', 'en-US,en;q=0.9');
-                  proxyReq.setHeader('Origin', 'https://www.instagram.com');
+                  proxyReq.setHeader('Origin', origin);
                   console.log('[Video Proxy] Proxying to:', parsed.hostname, parsed.pathname.substring(0, 50) + '...');
                 } catch (e) {
                   console.error('[Video Proxy] Invalid URL:', videoUrl);
@@ -137,6 +139,12 @@ export default defineConfig(({ mode }) => {
               console.error('[FastSaver Proxy] Error:', err.message);
             });
           }
+        },
+        '/api/tikwm': {
+          target: 'https://www.tikwm.com',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api\/tikwm/, '/api/'),
+          secure: true,
         },
         '/api/claude': {
           target: 'https://api.anthropic.com',
