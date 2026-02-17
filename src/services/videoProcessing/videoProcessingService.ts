@@ -69,18 +69,21 @@ export const processInstagramVideoWithStatus = async (
     }
 
     // Step 6: Generate scripts using Claude AI
+    // Use AssemblyAI's detected language_code (returned in transcription response) so
+    // scripts are always written in the source video language, even when the caller
+    // doesn't pass an explicit language (e.g. CreateRewrite uses auto-detect).
     update('generating_scripts', 70, 'Generating script variations...', 30);
     const scripts = await generateScripts(
       transcription.text,
       request.storyDetails,
       request.systemPrompt,
       request.apiKey,
-      request.language
+      transcription.language_code || request.language
     );
-    
+
     // Complete
     update('completed', 100, 'Processing complete!');
-    
+
     // Return the result
     return {
       transcription: transcription.text,
@@ -152,12 +155,12 @@ export const processTikTokVideoWithStatus = async (
       request.storyDetails,
       request.systemPrompt,
       request.apiKey,
-      request.language
+      transcription.language_code || request.language
     );
-    
+
     // Complete
     update('completed', 100, 'Processing complete!');
-    
+
     // Return the result
     return {
       transcription: transcription.text,
