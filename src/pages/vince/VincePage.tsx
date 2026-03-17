@@ -30,6 +30,9 @@ import type { Video, VinceTemplate, UploadState, ProcessingState, SilencePace } 
 const POLL_INTERVAL = parseInt(import.meta.env.VITE_SUBMAGIC_POLL_INTERVAL_MS || '30000');
 const VINCE_SETTINGS_KEY = 'vince_editor_settings';
 
+/** Maximum time (ms) a video can stay in 'processing' before being marked as timed out */
+const PROCESSING_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes
+
 /** Vince editor settings that persist across page refreshes */
 interface VinceSettings {
   templateKey: string;
@@ -207,7 +210,7 @@ const VincePage: React.FC = () => {
     if (isSyncingRef.current || !user?.id) return;
 
     const processingVideos = videos.filter(
-      (v) => v.submagic_status === 'processing' && v.submagic_project_id
+      (v) => v.submagic_status === 'processing'
     );
 
     if (processingVideos.length === 0) return;
@@ -215,21 +218,63 @@ const VincePage: React.FC = () => {
     isSyncingRef.current = true;
     console.log('Found', processingVideos.length, 'videos still processing, syncing status...');
 
-    // Take the most recent processing video to restore UI state
-    const mostRecentProcessing = processingVideos[0]; // Already sorted by created_at desc
     let uiRestored = false;
     let needsRefetch = false;
 
     for (const video of processingVideos) {
       try {
-        const status = await getSubmagicProjectStatus(video.submagic_project_id!);
+        // Fix 1: Videos without a submagic_project_id never reached Submagic - mark as failed
+        if (!video.submagic_project_id) {
+          console.log('Video', video.id, 'has no Submagic project ID, marking as failed');
+          await updateVideoRecord(video.id, {
+            submagic_status: 'failed',
+            error_message: 'Processing failed to start - no project was created',
+          });
+          needsRefetch = true;
+          continue;
+        }
+
+        // Fix 2: Check for timeout - if processing started > 15 minutes ago, mark as timed out
+        if (video.processing_started_at) {
+          const elapsed = Date.now() - new Date(video.processing_started_at).getTime();
+          if (elapsed > PROCESSING_TIMEOUT_MS) {
+            console.log('Video', video.id, 'timed out after', Math.round(elapsed / 60000), 'minutes');
+            // Still check Submagic one last time before marking as failed
+            try {
+              const status = await getSubmagicProjectStatus(video.submagic_project_id);
+              const videoUrl = status.downloadUrl || status.directUrl;
+              if (status.status === 'completed' && videoUrl) {
+                // It actually completed! Save it.
+                console.log('Timed-out video', video.id, 'actually completed on Submagic, saving...');
+                const processedPath = await saveProcessedVideo(videoUrl, user!.id, video.original_filename);
+                await updateVideoRecord(video.id, {
+                  submagic_status: 'completed',
+                  processed_storage_path: processedPath,
+                  submagic_download_url: videoUrl,
+                  processing_completed_at: new Date().toISOString(),
+                });
+                needsRefetch = true;
+                continue;
+              }
+            } catch {
+              // Submagic API call failed - proceed with timeout
+            }
+            await updateVideoRecord(video.id, {
+              submagic_status: 'failed',
+              error_message: `Processing timed out after ${Math.round(elapsed / 60000)} minutes`,
+            });
+            needsRefetch = true;
+            continue;
+          }
+        }
+
+        // Normal sync: check Submagic for current status
+        const status = await getSubmagicProjectStatus(video.submagic_project_id);
         console.log('Submagic status for', video.id, ':', status.status);
 
-        // Check for either downloadUrl or directUrl (Submagic returns both)
         const videoUrl = status.downloadUrl || status.directUrl;
 
         if (status.status === 'completed' && videoUrl) {
-          // Video finished while we were away - update database
           console.log('Video', video.id, 'completed, updating database with URL:', videoUrl);
           const processedPath = await saveProcessedVideo(
             videoUrl,
@@ -244,27 +289,25 @@ const VincePage: React.FC = () => {
           });
           needsRefetch = true;
         } else if (status.status === 'failed') {
-          // Video failed while we were away
           console.log('Video', video.id, 'failed, updating database');
           await updateVideoRecord(video.id, {
             submagic_status: 'failed',
             error_message: status.errorMessage || 'Processing failed',
           });
           needsRefetch = true;
-        } else if (['processing', 'transcribing', 'exporting'].includes(status.status) && video.id === mostRecentProcessing.id && !uiRestored) {
-          // Video is still processing (any of the intermediate states) - restore the UI state
+        } else if (['processing', 'transcribing', 'exporting'].includes(status.status) && !uiRestored) {
+          // Restore UI for the first (most recent) video still legitimately processing
           console.log('Restoring processing UI for video:', video.id, 'status:', status.status);
           setCurrentVideoId(video.id);
-          setCurrentProjectId(video.submagic_project_id!);
+          setCurrentProjectId(video.submagic_project_id);
 
-          // Estimate progress based on current status
           let estimatedProgress = 30;
           if (status.status === 'transcribing') estimatedProgress = 50;
           if (status.status === 'exporting') estimatedProgress = 75;
 
           setProcessingState({
             status: 'processing',
-            projectId: video.submagic_project_id!,
+            projectId: video.submagic_project_id,
             progress: estimatedProgress
           });
           setUploadState({ status: 'uploaded', videoId: video.id, storagePath: video.original_storage_path });
@@ -272,6 +315,21 @@ const VincePage: React.FC = () => {
         }
       } catch (error) {
         console.error('Error syncing video status:', video.id, error);
+        // Fix 3: If we can't reach Submagic and the video is old, mark as failed
+        if (video.processing_started_at) {
+          const elapsed = Date.now() - new Date(video.processing_started_at).getTime();
+          if (elapsed > PROCESSING_TIMEOUT_MS) {
+            try {
+              await updateVideoRecord(video.id, {
+                submagic_status: 'failed',
+                error_message: 'Processing timed out and status check failed',
+              });
+              needsRefetch = true;
+            } catch (updateError) {
+              console.error('Failed to update timed-out video:', video.id, updateError);
+            }
+          }
+        }
       }
     }
 
@@ -296,15 +354,49 @@ const VincePage: React.FC = () => {
     }
   }, [activeTab, videos.length, syncProcessingVideos]);
 
+  // Track polling start time to detect timeout during active polling
+  const pollingStartRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (currentProjectId && processingState.status === 'processing') {
+      if (!pollingStartRef.current) pollingStartRef.current = Date.now();
+    } else {
+      pollingStartRef.current = null;
+    }
+  }, [currentProjectId, processingState.status]);
+
   // Poll for processing status when we have an active project
   const { data: projectStatus } = useQuery(
     ['vince-project', currentProjectId],
     () => getSubmagicProjectStatus(currentProjectId!),
     {
       enabled: !!currentProjectId && processingState.status === 'processing',
+      retry: 3,
+      retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 10000),
+      onError: (error: unknown) => {
+        console.error('Polling error for project', currentProjectId, ':', error);
+        // If we've been polling for longer than the timeout, give up
+        if (pollingStartRef.current && (Date.now() - pollingStartRef.current > PROCESSING_TIMEOUT_MS)) {
+          setProcessingState({
+            status: 'error',
+            message: 'Processing timed out. Please check your video in the library or try again.',
+            retryable: true,
+          });
+          setCurrentProjectId(null);
+        }
+      },
       refetchInterval: (data) => {
         // Continue polling for all intermediate states
         if (data?.status && ['processing', 'transcribing', 'exporting'].includes(data.status)) {
+          // Check for timeout during active polling
+          if (pollingStartRef.current && (Date.now() - pollingStartRef.current > PROCESSING_TIMEOUT_MS)) {
+            console.warn('Processing timeout reached during polling');
+            return false; // Stop polling, the onError/status handler will clean up
+          }
+          return POLL_INTERVAL;
+        }
+        // If we get an unexpected status (not completed/failed/known), keep polling
+        if (data?.status && !['completed', 'failed'].includes(data.status)) {
+          console.warn('Unknown Submagic status:', data.status, '- continuing to poll');
           return POLL_INTERVAL;
         }
         return false;
@@ -370,6 +462,23 @@ const VincePage: React.FC = () => {
         refetchVideos();
         setCurrentProjectId(null);
       } else if (['processing', 'transcribing', 'exporting'].includes(projectStatus.status) && processingState.status === 'processing') {
+        // Check for timeout during active polling
+        if (pollingStartRef.current && (Date.now() - pollingStartRef.current > PROCESSING_TIMEOUT_MS)) {
+          console.warn('Processing timeout reached, marking as failed');
+          await updateVideoRecord(currentVideoId, {
+            submagic_status: 'failed',
+            error_message: 'Processing timed out after 15 minutes',
+          });
+          setProcessingState({
+            status: 'error',
+            message: 'Processing timed out after 15 minutes. Please try again.',
+            retryable: true,
+          });
+          refetchVideos();
+          setCurrentProjectId(null);
+          return;
+        }
+
         // Update progress based on current Submagic phase
         let targetProgress = processingState.progress;
         if (projectStatus.status === 'processing') {
