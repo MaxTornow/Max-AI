@@ -17,10 +17,12 @@ interface FeatureTogglesProps {
   removeBadTakes: boolean;
   hookTitleEnabled: boolean;
   hookTitleText: string;
+  hookTitlePosition: number;
   onRemoveSilencePaceChange: (value: SilencePace) => void;
   onRemoveBadTakesChange: (value: boolean) => void;
   onHookTitleEnabledChange: (value: boolean) => void;
   onHookTitleTextChange: (value: string) => void;
+  onHookTitlePositionChange: (value: number) => void;
 }
 
 /**
@@ -41,10 +43,12 @@ const FeatureToggles: React.FC<FeatureTogglesProps> = ({
   removeBadTakes,
   hookTitleEnabled,
   hookTitleText,
+  hookTitlePosition,
   onRemoveSilencePaceChange,
   onRemoveBadTakesChange,
   onHookTitleEnabledChange,
   onHookTitleTextChange,
+  onHookTitlePositionChange,
 }) => {
   return (
     <div className="w-full space-y-4">
@@ -230,15 +234,47 @@ const FeatureToggles: React.FC<FeatureTogglesProps> = ({
           </label>
         </div>
         {hookTitleEnabled && (
-          <input
-            type="text"
-            value={hookTitleText}
-            onChange={(e) => onHookTitleTextChange(e.target.value)}
-            placeholder="Custom text (leave empty for AI-generated)"
-            disabled={disabled}
-            maxLength={100}
-            className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
-          />
+          <>
+            <input
+              type="text"
+              value={hookTitleText}
+              onChange={(e) => onHookTitleTextChange(e.target.value)}
+              placeholder="Custom text (leave empty for AI-generated)"
+              disabled={disabled}
+              maxLength={100}
+              className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            />
+            {/* Vertical Position Selector */}
+            <div>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
+                Vertical Position
+              </label>
+              <div className="flex gap-2">
+                {[
+                  { value: 10, label: 'Top' },
+                  { value: 40, label: 'Middle' },
+                  { value: 70, label: 'Bottom' },
+                ].map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => !disabled && onHookTitlePositionChange(option.value)}
+                    disabled={disabled}
+                    className={`flex-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                      hookTitlePosition === option.value
+                        ? 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300 ring-1 ring-yellow-300 dark:ring-yellow-700'
+                        : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-600 border border-gray-300 dark:border-gray-600'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1.5">
+                Tip: Place hook and subtitles in different zones to avoid overlap
+              </p>
+            </div>
+          </>
         )}
       </div>
 

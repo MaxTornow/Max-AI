@@ -386,7 +386,7 @@ export const processVideo = async (
     // New enhancement options
     removeSilencePace?: 'natural' | 'fast' | 'extra-fast';
     removeBadTakes?: boolean;
-    hookTitle?: boolean | { text: string };
+    hookTitle?: boolean | { text?: string; top?: number };
   }
 ): Promise<string> => {
   console.log('Starting video processing:', videoId);

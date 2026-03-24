@@ -19,6 +19,7 @@ interface VinceEditorState {
   selectedFile: File | null;
   videoTitle: string;
   hookTitleText: string;
+  hookTitlePosition: number;
   // Upload/Processing state - persists across navigation
   uploadState: UploadState;
   processingState: ProcessingState;
@@ -31,8 +32,9 @@ interface VinceEditorContextValue {
   setSelectedFile: (file: File | null) => void;
   setVideoTitle: (title: string) => void;
   setHookTitleText: (text: string) => void;
+  setHookTitlePosition: (position: number) => void;
   setUploadState: (state: UploadState) => void;
-  setProcessingState: (state: ProcessingState) => void;
+  setProcessingState: (stateOrUpdater: ProcessingState | ((prev: ProcessingState) => ProcessingState)) => void;
   setCurrentVideoId: (id: string | null) => void;
   setCurrentProjectId: (id: string | null) => void;
   clearEditorState: () => void;
@@ -42,6 +44,7 @@ const defaultState: VinceEditorState = {
   selectedFile: null,
   videoTitle: '',
   hookTitleText: '',
+  hookTitlePosition: 10,
   uploadState: { status: 'idle' },
   processingState: { status: 'idle' },
   currentVideoId: null,
@@ -79,12 +82,22 @@ export const VinceEditorProvider: React.FC<{ children: ReactNode }> = ({ childre
     setEditorState((prev) => ({ ...prev, hookTitleText: text }));
   }, []);
 
+  const setHookTitlePosition = useCallback((hookTitlePosition: number) => {
+    setEditorState((prev) => ({ ...prev, hookTitlePosition }));
+  }, []);
+
   const setUploadState = useCallback((uploadState: UploadState) => {
     setEditorState((prev) => ({ ...prev, uploadState }));
   }, []);
 
-  const setProcessingState = useCallback((processingState: ProcessingState) => {
-    setEditorState((prev) => ({ ...prev, processingState }));
+  const setProcessingState = useCallback((stateOrUpdater: ProcessingState | ((prev: ProcessingState) => ProcessingState)) => {
+    setEditorState((prev) => {
+      const newProcessingState = typeof stateOrUpdater === 'function'
+        ? stateOrUpdater(prev.processingState)
+        : stateOrUpdater;
+      if (newProcessingState === prev.processingState) return prev;
+      return { ...prev, processingState: newProcessingState };
+    });
   }, []);
 
   const setCurrentVideoId = useCallback((currentVideoId: string | null) => {
@@ -106,6 +119,7 @@ export const VinceEditorProvider: React.FC<{ children: ReactNode }> = ({ childre
         setSelectedFile,
         setVideoTitle,
         setHookTitleText,
+        setHookTitlePosition,
         setUploadState,
         setProcessingState,
         setCurrentVideoId,

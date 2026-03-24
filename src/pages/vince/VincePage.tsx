@@ -44,6 +44,7 @@ interface VinceSettings {
   removeBadTakes: boolean;
   hookTitleEnabled: boolean;
   hookTitleText: string;
+  hookTitlePosition: number;
 }
 
 /** Load saved settings from localStorage */
@@ -84,6 +85,7 @@ const VincePage: React.FC = () => {
       selectedFile,
       videoTitle,
       hookTitleText,
+      hookTitlePosition,
       uploadState,
       processingState,
       currentVideoId,
@@ -92,6 +94,7 @@ const VincePage: React.FC = () => {
     setSelectedFile,
     setVideoTitle,
     setHookTitleText,
+    setHookTitlePosition,
     setUploadState,
     setProcessingState,
     setCurrentVideoId,
@@ -128,10 +131,13 @@ const VincePage: React.FC = () => {
   // hookTitleText comes from context (useVinceEditor) for in-app navigation persistence
   // We sync it to localStorage for page refresh persistence in the useEffect below
 
-  // Initialize hookTitleText from localStorage on mount (for page refresh)
+  // Initialize hookTitleText and hookTitlePosition from localStorage on mount (for page refresh)
   useEffect(() => {
     if (savedSettings.hookTitleText && !hookTitleText) {
       setHookTitleText(savedSettings.hookTitleText);
+    }
+    if (savedSettings.hookTitlePosition !== undefined && hookTitlePosition === 10) {
+      setHookTitlePosition(savedSettings.hookTitlePosition);
     }
   }, []); // Only run once on mount
 
@@ -154,6 +160,7 @@ const VincePage: React.FC = () => {
       removeBadTakes,
       hookTitleEnabled,
       hookTitleText,
+      hookTitlePosition,
     };
     try {
       localStorage.setItem(VINCE_SETTINGS_KEY, JSON.stringify(settings));
@@ -170,6 +177,7 @@ const VincePage: React.FC = () => {
     removeBadTakes,
     hookTitleEnabled,
     hookTitleText,
+    hookTitlePosition,
   ]);
 
   // Warn user before leaving page if they have an unuploaded video
@@ -356,6 +364,9 @@ const VincePage: React.FC = () => {
 
   // Track polling start time to detect timeout during active polling
   const pollingStartRef = useRef<number | null>(null);
+  // Ref to read processingState without adding it to useEffect deps (prevents infinite loops)
+  const processingStateRef = useRef(processingState);
+  processingStateRef.current = processingState;
   useEffect(() => {
     if (currentProjectId && processingState.status === 'processing') {
       if (!pollingStartRef.current) pollingStartRef.current = Date.now();
@@ -447,7 +458,7 @@ const VincePage: React.FC = () => {
             retryable: false,
           });
         }
-      } else if (projectStatus.status === 'failed' && processingState.status === 'processing') {
+      } else if (projectStatus.status === 'failed' && processingStateRef.current.status === 'processing') {
         // Only handle failure if we're currently in 'processing' state
         await updateVideoRecord(currentVideoId, {
           submagic_status: 'failed',
@@ -461,7 +472,7 @@ const VincePage: React.FC = () => {
         });
         refetchVideos();
         setCurrentProjectId(null);
-      } else if (['processing', 'transcribing', 'exporting'].includes(projectStatus.status) && processingState.status === 'processing') {
+      } else if (['processing', 'transcribing', 'exporting'].includes(projectStatus.status) && processingStateRef.current.status === 'processing') {
         // Check for timeout during active polling
         if (pollingStartRef.current && (Date.now() - pollingStartRef.current > PROCESSING_TIMEOUT_MS)) {
           console.warn('Processing timeout reached, marking as failed');
@@ -480,25 +491,30 @@ const VincePage: React.FC = () => {
         }
 
         // Update progress based on current Submagic phase
-        let targetProgress = processingState.progress;
-        if (projectStatus.status === 'processing') {
-          targetProgress = Math.min(processingState.progress + 3, 40);
-        } else if (projectStatus.status === 'transcribing') {
-          targetProgress = Math.max(40, Math.min(processingState.progress + 5, 70));
-        } else if (projectStatus.status === 'exporting') {
-          targetProgress = Math.max(70, Math.min(processingState.progress + 5, 90));
-        }
-
-        setProcessingState({
-          status: 'processing',
-          projectId: processingState.projectId,
-          progress: targetProgress,
+        // Use functional update to avoid depending on processingState in the dep array
+        setProcessingState((prev) => {
+          if (prev.status !== 'processing') return prev;
+          let targetProgress = prev.progress;
+          if (projectStatus.status === 'processing') {
+            targetProgress = Math.min(prev.progress + 3, 40);
+          } else if (projectStatus.status === 'transcribing') {
+            targetProgress = Math.max(40, Math.min(prev.progress + 5, 70));
+          } else if (projectStatus.status === 'exporting') {
+            targetProgress = Math.max(70, Math.min(prev.progress + 5, 90));
+          }
+          // Only update if progress actually changed to avoid re-render loops
+          if (targetProgress === prev.progress) return prev;
+          return {
+            status: 'processing',
+            projectId: prev.projectId,
+            progress: targetProgress,
+          };
         });
       }
     };
 
     handleStatusChange();
-  }, [projectStatus, currentVideoId, user, selectedFile, showToast, refetchVideos, processingState, setProcessingState]);
+  }, [projectStatus, currentVideoId, user, selectedFile, showToast, refetchVideos, setProcessingState]);
 
   // Update feature toggles when template changes
   const handleTemplateChange = useCallback((template: VinceTemplate) => {
@@ -560,6 +576,7 @@ const VincePage: React.FC = () => {
         remove_bad_takes: removeBadTakes,
         hook_title_enabled: hookTitleEnabled,
         hook_title_text: hookTitleText.trim() || null,
+        hook_title_position: hookTitleEnabled ? hookTitlePosition : null,
         error_message: null,
         retry_count: 0,
         processing_started_at: null,
@@ -582,7 +599,11 @@ const VincePage: React.FC = () => {
         removeSilencePace: removeSilencePace !== 'off' ? removeSilencePace : undefined,
         removeBadTakes: removeBadTakes || undefined,
         hookTitle: hookTitleEnabled
-          ? (hookTitleText.trim() ? { text: hookTitleText.trim() } : true)
+          ? (hookTitleText.trim()
+            ? { text: hookTitleText.trim(), top: hookTitlePosition }
+            : hookTitlePosition !== 10
+              ? { top: hookTitlePosition }
+              : true)
           : undefined,
       });
 
@@ -810,10 +831,12 @@ const VincePage: React.FC = () => {
                   removeBadTakes={removeBadTakes}
                   hookTitleEnabled={hookTitleEnabled}
                   hookTitleText={hookTitleText}
+                  hookTitlePosition={hookTitlePosition}
                   onRemoveSilencePaceChange={setRemoveSilencePace}
                   onRemoveBadTakesChange={setRemoveBadTakes}
                   onHookTitleEnabledChange={setHookTitleEnabled}
                   onHookTitleTextChange={setHookTitleText}
+                  onHookTitlePositionChange={setHookTitlePosition}
                 />
               </div>
 

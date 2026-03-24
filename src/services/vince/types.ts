@@ -38,7 +38,7 @@ export interface SubmagicCreateProjectRequest {
   removeBadTakes?: boolean;
   /** Hook title: true = AI-generated, object = custom text */
   hookTitle?: boolean | {
-    text: string;
+    text?: string;
     template?: string;
     top?: number;
     size?: number;
@@ -103,6 +103,8 @@ export interface Video {
   hook_title_enabled: boolean;
   /** Custom hook title text (null = AI-generated) */
   hook_title_text: string | null;
+  /** Hook title vertical position (0-100, null = default) */
+  hook_title_position: number | null;
   error_message: string | null;
   retry_count: number;
   created_at: string;

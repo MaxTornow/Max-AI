@@ -23,10 +23,12 @@ describe('FeatureToggles Component', () => {
     removeBadTakes: false,
     hookTitleEnabled: false,
     hookTitleText: '',
+    hookTitlePosition: 10,
     onRemoveSilencePaceChange: jest.fn(),
     onRemoveBadTakesChange: jest.fn(),
     onHookTitleEnabledChange: jest.fn(),
     onHookTitleTextChange: jest.fn(),
+    onHookTitlePositionChange: jest.fn(),
   };
 
   beforeEach(() => {
