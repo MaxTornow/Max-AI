@@ -7,8 +7,7 @@
 export const API_KEYS = {
   FASTSAVER: import.meta.env.VITE_FASTSAVER_API_TOKEN || '',
   TIKTOK: import.meta.env.VITE_TIKTOK_API_TOKEN || '',
-  ASSEMBLY_AI: import.meta.env.VITE_ASSEMBLY_AI_API_KEY || '',
-  CLAUDE: import.meta.env.VITE_CLAUDE_API_KEY || ''
+  ASSEMBLY_AI: import.meta.env.VITE_ASSEMBLY_AI_API_KEY || ''
 };
 
 // API Endpoints

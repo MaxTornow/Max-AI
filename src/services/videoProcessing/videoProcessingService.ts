@@ -77,7 +77,6 @@ export const processInstagramVideoWithStatus = async (
       transcription.text,
       request.storyDetails,
       request.systemPrompt,
-      request.apiKey,
       transcription.language_code || request.language
     );
 
@@ -154,7 +153,6 @@ export const processTikTokVideoWithStatus = async (
       transcription.text,
       request.storyDetails,
       request.systemPrompt,
-      request.apiKey,
       transcription.language_code || request.language
     );
 

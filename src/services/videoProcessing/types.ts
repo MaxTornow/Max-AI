@@ -19,7 +19,6 @@ export interface VideoProcessingRequest {
   videoDetails: VideoDetails;
   storyDetails: StoryDetails;
   systemPrompt?: string;
-  apiKey?: string;
   language?: string; // BCP-47 code e.g. 'de', or undefined = auto-detect
 }
 

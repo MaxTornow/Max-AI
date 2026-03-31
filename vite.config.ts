@@ -146,31 +146,30 @@ export default defineConfig(({ mode }) => {
           rewrite: (path) => path.replace(/^\/api\/tikwm/, '/api/'),
           secure: true,
         },
-        '/api/claude': {
+        '/api/claude-generate': {
           target: 'https://api.anthropic.com',
           changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/api\/claude/, ''),
+          rewrite: () => '/v1/messages',
           secure: true,
           configure: (proxy, options) => {
-            // Log requests going through the proxy (for debugging)
             proxy.on('proxyReq', (proxyReq, req, res) => {
-              console.log('Proxying request to Claude API:', req.url);
-
-              // Add the required header for browser-based requests to Claude API
-              proxyReq.setHeader('anthropic-dangerous-direct-browser-access', 'true');
-
-              // Log headers for debugging
-              console.log('Request headers:', proxyReq.getHeaders());
+              // Inject API key server-side (CLAUDE_API_KEY has no VITE_ prefix, so it's NOT in the client bundle)
+              const apiKey = env.CLAUDE_API_KEY;
+              if (apiKey) {
+                proxyReq.setHeader('x-api-key', apiKey);
+              } else {
+                console.warn('[Claude Proxy] Warning: CLAUDE_API_KEY not set in env');
+              }
+              proxyReq.setHeader('anthropic-version', '2023-06-01');
+              console.log('[Claude Proxy] Proxying request');
             });
 
-            // Log responses from the proxy (for debugging)
             proxy.on('proxyRes', (proxyRes, req, res) => {
-              console.log('Received response from Claude API:', proxyRes.statusCode);
+              console.log('[Claude Proxy] Response status:', proxyRes.statusCode);
             });
 
-            // Log errors
             proxy.on('error', (err, req, res) => {
-              console.error('Proxy error:', err);
+              console.error('[Claude Proxy] Error:', err.message);
             });
           }
         }

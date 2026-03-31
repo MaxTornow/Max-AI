@@ -23,13 +23,10 @@
   status = 200
   force = true
 
-# Proxy for Claude API with the required header
-[[redirects]]
-  from = "/api/claude/*"
-  to = "https://api.anthropic.com/:splat"
-  status = 200
-  force = true
-  headers = {X-From-Netlify = "true", anthropic-dangerous-direct-browser-access = "true"}
+# Claude API via Edge Function (API key stays server-side)
+[[edge_functions]]
+  path = "/api/claude-generate"
+  function = "claude-generate"
 
 # SPA fallback
 [[redirects]]

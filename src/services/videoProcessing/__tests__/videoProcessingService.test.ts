@@ -109,7 +109,6 @@ describe('Video Processing Service', () => {
         mockTranscription.text,
         instagramRequest.storyDetails,
         undefined,
-        undefined,
         undefined
       );
 
@@ -155,7 +154,6 @@ describe('Video Processing Service', () => {
       expect(generateScripts).toHaveBeenCalledWith(
         mockTranscription.text,
         tiktokRequest.storyDetails,
-        undefined,
         undefined,
         undefined
       );

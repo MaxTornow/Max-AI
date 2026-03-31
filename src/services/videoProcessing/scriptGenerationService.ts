@@ -4,41 +4,27 @@
  */
 
 import { ScriptGenerationResponse, StoryDetails } from './types';
-import { API_KEYS, CLAUDE_CONFIG } from './config';
+import { CLAUDE_CONFIG } from './config';
 
 /**
  * Generates video scripts using Claude AI based on transcription and story details
  * @param {string} transcription - The video transcription
  * @param {StoryDetails} storyDetails - Details about the story, audience, etc.
  * @param {string} systemPrompt - Optional additional system prompt
- * @param {string} apiKey - Optional API key (defaults to environment variable)
  * @returns {Promise<ScriptGenerationResponse>} Generated scripts
  */
 export const generateScripts = async (
   transcription: string,
   storyDetails: StoryDetails,
   systemPrompt?: string,
-  apiKey?: string,
   language?: string
 ): Promise<ScriptGenerationResponse> => {
   try {
     console.log('Generating scripts for transcription:', transcription.substring(0, 50) + '...');
     console.log('Story details:', storyDetails);
     
-    // Use provided API key or default to environment variable
-    const claudeApiKey = apiKey || API_KEYS.CLAUDE;
-
-    // Validate API key is configured
-    if (!claudeApiKey) {
-      console.error('[DEBUG] Claude API key not configured');
-      throw new Error('Claude API key not configured. Set VITE_CLAUDE_API_KEY in .env');
-    }
-
-    // Debug logging for API key (mask most of it for security)
-    const maskedKey = claudeApiKey.substring(0, 10) + '...' + claudeApiKey.substring(claudeApiKey.length - 5);
-    console.log('[DEBUG] Using Claude API key:', maskedKey);
     console.log('[DEBUG] Using model:', CLAUDE_CONFIG.MODEL);
-    
+
     const languageNames: Record<string, string> = {
       en: 'English', es: 'Spanish', fr: 'French', de: 'German', it: 'Italian',
       pt: 'Portuguese', nl: 'Dutch', pl: 'Polish', ru: 'Russian', ja: 'Japanese',
@@ -140,13 +126,10 @@ Provide the scripts in the following JSON format:
     try {
       console.log('[DEBUG] Making request to Claude API via proxy');
       
-      // Using proxy to avoid CORS issues
-      const response = await fetch('/api/claude/v1/messages', {
+      const response = await fetch('/api/claude-generate', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': claudeApiKey,
-          'anthropic-version': '2023-06-01'
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           model: CLAUDE_CONFIG.MODEL,
