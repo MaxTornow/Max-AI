@@ -201,6 +201,56 @@ export const saveProcessedVideo = async (
 };
 
 /**
+ * Delete original video file from storage after processed version is confirmed saved.
+ * Non-fatal: errors are logged as warnings, never thrown.
+ * Idempotent: calling on an already-deleted file returns success.
+ */
+export const deleteOriginalVideo = async (
+  originalStoragePath: string
+): Promise<void> => {
+  console.log('Cleaning up original video file:', originalStoragePath);
+  const { error } = await supabase.storage
+    .from('videos')
+    .remove([originalStoragePath]);
+  if (error) {
+    console.warn('Failed to delete original video (non-fatal):', error);
+  } else {
+    console.log('Original video deleted successfully:', originalStoragePath);
+  }
+};
+
+/**
+ * Complete video processing: save processed video, update DB, and clean up original.
+ * Only deletes the original if the processed version was saved to Supabase Storage
+ * (not a URL fallback from CORS failure).
+ */
+export const completeVideoProcessing = async (
+  videoId: string,
+  userId: string,
+  originalFilename: string,
+  originalStoragePath: string,
+  downloadUrl: string
+): Promise<string> => {
+  // 1. Download from Submagic and save to Supabase Storage
+  const processedPath = await saveProcessedVideo(downloadUrl, userId, originalFilename);
+
+  // 2. Update database record
+  await updateVideoRecord(videoId, {
+    submagic_status: 'completed',
+    processed_storage_path: processedPath,
+    submagic_download_url: downloadUrl,
+    processing_completed_at: new Date().toISOString(),
+  });
+
+  // 3. Delete original ONLY if processed was saved to storage (not URL fallback)
+  if (!processedPath.startsWith('http')) {
+    await deleteOriginalVideo(originalStoragePath);
+  }
+
+  return processedPath;
+};
+
+/**
  * Get signed URL for video download
  */
 export const getVideoSignedUrl = async (

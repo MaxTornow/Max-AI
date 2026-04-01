@@ -21,7 +21,7 @@ import {
   deleteVideo,
   processVideo,
   getSubmagicProjectStatus,
-  saveProcessedVideo,
+  completeVideoProcessing,
   getVideoSignedUrl,
 } from '@services/vince';
 import { VINCE_TEMPLATES, getDefaultTemplate } from '@services/vince/templates';
@@ -254,13 +254,10 @@ const VincePage: React.FC = () => {
               if (status.status === 'completed' && videoUrl) {
                 // It actually completed! Save it.
                 console.log('Timed-out video', video.id, 'actually completed on Submagic, saving...');
-                const processedPath = await saveProcessedVideo(videoUrl, user!.id, video.original_filename);
-                await updateVideoRecord(video.id, {
-                  submagic_status: 'completed',
-                  processed_storage_path: processedPath,
-                  submagic_download_url: videoUrl,
-                  processing_completed_at: new Date().toISOString(),
-                });
+                await completeVideoProcessing(
+                  video.id, user!.id, video.original_filename,
+                  video.original_storage_path, videoUrl
+                );
                 needsRefetch = true;
                 continue;
               }
@@ -284,17 +281,10 @@ const VincePage: React.FC = () => {
 
         if (status.status === 'completed' && videoUrl) {
           console.log('Video', video.id, 'completed, updating database with URL:', videoUrl);
-          const processedPath = await saveProcessedVideo(
-            videoUrl,
-            user!.id,
-            video.original_filename
+          await completeVideoProcessing(
+            video.id, user!.id, video.original_filename,
+            video.original_storage_path, videoUrl
           );
-          await updateVideoRecord(video.id, {
-            submagic_status: 'completed',
-            processed_storage_path: processedPath,
-            submagic_download_url: videoUrl,
-            processing_completed_at: new Date().toISOString(),
-          });
           needsRefetch = true;
         } else if (status.status === 'failed') {
           console.log('Video', video.id, 'failed, updating database');
@@ -429,20 +419,13 @@ const VincePage: React.FC = () => {
         setProcessingState({ status: 'downloading', message: 'Saving processed video...' });
 
         try {
-          // Try to save processed video to Supabase
-          const processedPath = await saveProcessedVideo(
-            videoUrl,
-            user!.id,
-            selectedFile?.name || 'video.mp4'
+          // Save processed video, update DB, and clean up original
+          await completeVideoProcessing(
+            currentVideoId, user!.id,
+            selectedFile?.name || 'video.mp4',
+            uploadState.status === 'uploaded' ? uploadState.storagePath : '',
+            videoUrl
           );
-
-          // Update database record
-          await updateVideoRecord(currentVideoId, {
-            submagic_status: 'completed',
-            processed_storage_path: processedPath,
-            submagic_download_url: videoUrl,
-            processing_completed_at: new Date().toISOString(),
-          });
 
           setProcessingState({ status: 'completed', videoId: currentVideoId });
           showToast('Video processing complete!', 'success');
