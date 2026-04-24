@@ -24,6 +24,7 @@ import {
   completeVideoProcessing,
   getVideoSignedUrl,
 } from '@services/vince';
+import { formatSubmagicErrorMessage } from '@services/vince/retry';
 import { VINCE_TEMPLATES, getDefaultTemplate } from '@services/vince/templates';
 import type { Video, VinceTemplate, UploadState, ProcessingState, SilencePace } from '@services/vince/types';
 
@@ -596,7 +597,7 @@ const VincePage: React.FC = () => {
 
     } catch (error) {
       console.error('Process video error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'An error occurred';
+      const errorMessage = formatSubmagicErrorMessage(error);
       setUploadState({ status: 'error', message: errorMessage });
       setProcessingState({ status: 'error', message: errorMessage, retryable: true });
       showToast(errorMessage, 'error');

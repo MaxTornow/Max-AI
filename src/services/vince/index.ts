@@ -11,6 +11,7 @@ import type {
   SubmagicProjectResponse,
 } from './types';
 import { MAX_TITLE_LENGTH } from './types';
+import { retryableFetch } from './retry';
 
 const SUBMAGIC_API_URL = import.meta.env.VITE_SUBMAGIC_API_URL || 'https://api.submagic.co/v1';
 const SUBMAGIC_API_KEY = import.meta.env.VITE_SUBMAGIC_API_KEY;
@@ -29,20 +30,18 @@ export const createSubmagicProject = async (
 
   console.log('Creating Submagic project:', request.title);
 
-  const response = await fetch(`${SUBMAGIC_API_URL}/projects`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': SUBMAGIC_API_KEY,
+  const response = await retryableFetch(
+    `${SUBMAGIC_API_URL}/projects`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': SUBMAGIC_API_KEY,
+      },
+      body: JSON.stringify(request),
     },
-    body: JSON.stringify(request),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('Submagic API error:', response.status, errorText);
-    throw new Error(`Submagic API error: ${response.status} - ${errorText}`);
-  }
+    'Submagic API error'
+  );
 
   const data = await response.json();
   console.log('Submagic project created:', data.id);
