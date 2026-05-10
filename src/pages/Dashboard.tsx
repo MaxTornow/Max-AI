@@ -2,6 +2,8 @@ import React from 'react';
 import { FiArrowLeft } from 'react-icons/fi';
 import logoImage from '../assets/Smartphone Freedom Lifestyle Logo 1.png';
 
+const FEEDBACK_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSf9dl7ODWMR2eqR1k1gbXr5N54ZJjDEiihsC-eOxugnNYMcXQ/viewform?usp=header';
+
 /**
  * Dashboard page - Welcome screen for MAXAI
  * @returns {JSX.Element} Dashboard page
@@ -30,6 +32,27 @@ const Dashboard: React.FC = () => {
       {/* Mobile instruction */}
       <div className="md:hidden text-gray-600 dark:text-gray-400 text-center">
         <p className="text-lg">Tap the menu to pick your AI tool</p>
+      </div>
+
+      {/* Feedback card */}
+      <div className="mt-12 w-full max-w-md">
+        <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 text-center shadow-sm">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+            We want to hear your feedback
+          </h2>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+            Tell us about your experience so we can keep improving the tools.
+          </p>
+          <a
+            href={FEEDBACK_FORM_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center px-6 py-3 rounded-md bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white text-sm font-semibold shadow-md hover:shadow-lg transition-all"
+          >
+            <span className="mr-2 text-base" aria-hidden="true">❤️</span>
+            Share your feedback
+          </a>
+        </div>
       </div>
     </div>
   );

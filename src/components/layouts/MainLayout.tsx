@@ -20,6 +20,8 @@ import {
   FiCheckCircle
 } from 'react-icons/fi';
 
+const FEEDBACK_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSf9dl7ODWMR2eqR1k1gbXr5N54ZJjDEiihsC-eOxugnNYMcXQ/viewform?usp=header';
+
 /**
  * Navigation item type - supports regular links and separators
  */
@@ -189,8 +191,21 @@ const MainLayout: React.FC = () => {
             </div>
           </div>
 
+          {/* Feedback */}
+          <div className="px-4 pt-4 border-t dark:border-gray-700">
+            <a
+              href={FEEDBACK_FORM_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center w-full px-4 py-3 text-sm font-semibold rounded-md bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white shadow-md hover:shadow-lg transition-all"
+            >
+              <span className="mr-2 text-base" aria-hidden="true">❤️</span>
+              Share your feedback
+            </a>
+          </div>
+
           {/* Theme toggle */}
-          <div className="p-4 border-t dark:border-gray-700">
+          <div className="p-4">
             <button
               onClick={toggleTheme}
               className="flex items-center justify-center w-full px-4 py-2 text-sm rounded-md bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200"
