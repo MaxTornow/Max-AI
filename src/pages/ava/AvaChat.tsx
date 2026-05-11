@@ -62,6 +62,7 @@ const AvaChat: React.FC = () => {
   const [showStyleSelector, setShowStyleSelector] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -195,6 +196,9 @@ const AvaChat: React.FC = () => {
       
       // Clear input
       setInput('');
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+      }
       
       // Get the selected style
       const selectedStyle = getSelectedStyle();
@@ -414,12 +418,23 @@ const AvaChat: React.FC = () => {
           >
             <FiPaperclip size={20} />
           </button>
-          <input
-            type="text"
+          <textarea
+            ref={textareaRef}
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => {
+              setInput(e.target.value);
+              e.target.style.height = 'auto';
+              e.target.style.height = `${Math.min(e.target.scrollHeight, 160)}px`;
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSendMessage(e as unknown as React.FormEvent);
+              }
+            }}
             placeholder="Type your message..."
-            className="flex-1 py-2 px-4 bg-gray-100 dark:bg-gray-700 border-0 rounded-full focus:ring-2 focus:ring-primary-500 dark:text-white"
+            rows={1}
+            className="flex-1 py-2 px-4 bg-gray-100 dark:bg-gray-700 border-0 rounded-2xl focus:ring-2 focus:ring-primary-500 dark:text-white resize-none max-h-40 overflow-y-auto"
             disabled={isLoading}
           />
           <button
