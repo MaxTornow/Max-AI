@@ -66,7 +66,7 @@ const MainLayout: React.FC = () => {
     { path: '/sage', label: 'Script Feedback AI', icon: <FiCheckCircle size={20} /> },
     { path: '/vince', label: 'AI Video Editor', icon: <FiFilm size={20} /> },
     { path: '/tyler', label: 'Simple Clip/Text Editor', icon: <FiFilm size={20} /> },
-    { path: '/my-styles', label: 'My Styles', icon: <FiList size={20} /> },
+    { path: '/my-styles', label: 'My Info', icon: <FiList size={20} /> },
     { type: 'separator' },
     { path: '/lara', label: 'LinkedIn Rewriting AI', icon: <FiMessageSquare size={20} /> },
     { path: '/lacy', label: 'LinkedIn Script Writing AI', icon: <FiMessageSquare size={20} /> },

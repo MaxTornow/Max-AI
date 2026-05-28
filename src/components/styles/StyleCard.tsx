@@ -44,21 +44,21 @@ const StyleCard: React.FC<StyleCardProps> = ({ style, onEdit, onDelete, onSelect
             <button 
               onClick={() => onSelect(style)}
               className="p-1.5 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
-              aria-label="Use style"
+              aria-label="Use info"
             >
               <FiCopy size={16} />
             </button>
             <button 
               onClick={() => onEdit(style)}
               className="p-1.5 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
-              aria-label="Edit style"
+              aria-label="Edit info"
             >
               <FiEdit2 size={16} />
             </button>
             <button 
               onClick={() => onDelete(style.id)}
               className="p-1.5 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
-              aria-label="Delete style"
+              aria-label="Delete info"
             >
               <FiTrash2 size={16} />
             </button>

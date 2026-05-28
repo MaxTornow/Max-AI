@@ -26,13 +26,13 @@ const DeleteConfirmation: React.FC<DeleteConfirmationProps> = ({
           <FiAlertTriangle className="h-6 w-6 text-red-600 dark:text-red-400" />
         </div>
         <h3 className="text-lg font-medium text-gray-900 dark:text-white">
-          Delete Style
+          Delete Info
         </h3>
       </div>
       
       <div className="mb-6">
         <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-          Are you sure you want to delete the style <span className="font-semibold">{styleName}</span>?
+          Are you sure you want to delete <span className="font-semibold">{styleName}</span>?
         </p>
         <p className="text-sm text-gray-600 dark:text-gray-400">
           This action cannot be undone.

@@ -46,7 +46,7 @@ const MyStyles: React.FC = () => {
       console.error('Cannot create style: No user ID available');
       setToast({
         show: true,
-        message: 'Cannot create style: You must be logged in',
+        message: 'Cannot create info: You must be logged in',
         type: 'error'
       });
       return;
@@ -65,7 +65,7 @@ const MyStyles: React.FC = () => {
       // Show success toast
       setToast({
         show: true,
-        message: 'Style created successfully!',
+        message: 'Info created successfully!',
         type: 'success'
       });
     } catch (error) {
@@ -74,7 +74,7 @@ const MyStyles: React.FC = () => {
       // Show error toast
       setToast({
         show: true,
-        message: `Failed to create style: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        message: `Failed to create info: ${error instanceof Error ? error.message : 'Unknown error'}`,
         type: 'error'
       });
     } finally {
@@ -96,7 +96,7 @@ const MyStyles: React.FC = () => {
       // Show success toast
       setToast({
         show: true,
-        message: 'Style updated successfully!',
+        message: 'Info updated successfully!',
         type: 'success'
       });
     } catch (error) {
@@ -105,7 +105,7 @@ const MyStyles: React.FC = () => {
       // Show error toast
       setToast({
         show: true,
-        message: `Failed to update style: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        message: `Failed to update info: ${error instanceof Error ? error.message : 'Unknown error'}`,
         type: 'error'
       });
     } finally {
@@ -156,7 +156,7 @@ const MyStyles: React.FC = () => {
       // Show success toast
       setToast({
         show: true,
-        message: `Style "${styleToDelete.name}" deleted successfully!`,
+        message: `Info "${styleToDelete.name}" deleted successfully!`,
         type: 'success'
       });
     } catch (error) {
@@ -165,7 +165,7 @@ const MyStyles: React.FC = () => {
       // Show error toast
       setToast({
         show: true,
-        message: `Failed to delete style: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        message: `Failed to delete info: ${error instanceof Error ? error.message : 'Unknown error'}`,
         type: 'error'
       });
     } finally {
@@ -182,7 +182,7 @@ const MyStyles: React.FC = () => {
     // Show info toast
     setToast({
       show: true,
-      message: `Style "${style.name}" selected and copied to clipboard`,
+      message: `Info "${style.name}" selected and copied to clipboard`,
       type: 'info'
     });
   };
@@ -191,9 +191,9 @@ const MyStyles: React.FC = () => {
     <div className="container mx-auto px-4 py-6">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">My Styles</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">My Info</h1>
           <p className="text-gray-600 dark:text-gray-400">
-            Manage your personal writing styles for AI-generated content.
+            Manage your personal info for AI-generated content.
           </p>
         </div>
         
@@ -206,14 +206,14 @@ const MyStyles: React.FC = () => {
             className="flex items-center px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
           >
             <FiPlus className="mr-2" />
-            New Style
+            New Info
           </button>
         ) : (
           <button
             onClick={() => window.location.href = '/login'}
             className="flex items-center px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
           >
-            Login to Create Styles
+            Login to Create Info
           </button>
         )}
       </div>
@@ -229,7 +229,7 @@ const MyStyles: React.FC = () => {
             </div>
             <div className="ml-3">
               <p className="text-sm text-yellow-700">
-                You need to be logged in to create and manage styles. 
+                You need to be logged in to create and manage info.
                 <a href="/login" className="font-medium underline text-yellow-700 hover:text-yellow-600">Log in</a> or 
                 <a href="/signup" className="font-medium underline text-yellow-700 hover:text-yellow-600">sign up</a> to continue.
               </p>

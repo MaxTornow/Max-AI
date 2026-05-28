@@ -42,7 +42,7 @@ const StyleForm: React.FC<StyleFormProps> = ({
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
     
-    if (!name.trim()) newErrors.name = 'Style name is required';
+    if (!name.trim()) newErrors.name = 'Info title is required';
     if (!niche.trim()) newErrors.niche = 'Niche is required';
     if (!targetAudience.trim()) newErrors.targetAudience = 'Target audience is required';
     if (!painPointsText.trim()) newErrors.painPoints = 'At least one pain point is required';
@@ -70,7 +70,7 @@ const StyleForm: React.FC<StyleFormProps> = ({
     // Check if user is authenticated
     if (!user?.id) {
       console.error('Cannot submit form: No user ID available');
-      alert('You must be logged in to create or edit styles. Please log in and try again.');
+      alert('You must be logged in to create or edit info. Please log in and try again.');
       window.location.href = '/login';
       return;
     }
@@ -105,7 +105,7 @@ const StyleForm: React.FC<StyleFormProps> = ({
       console.log('Style submitted successfully');
     } catch (error) {
       console.error('Error submitting style:', error);
-      alert(`Error creating style: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      alert(`Error creating info: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -113,7 +113,7 @@ const StyleForm: React.FC<StyleFormProps> = ({
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-          {initialStyle ? 'Edit Style' : 'Create New Style'}
+          {initialStyle ? 'Edit Info' : 'Create New Info'}
         </h2>
         <button
           onClick={onCancel}
@@ -127,7 +127,7 @@ const StyleForm: React.FC<StyleFormProps> = ({
       {/* Style Name */}
       <div className="mb-4">
         <label htmlFor="name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-          Style Name
+          Info Title
         </label>
         <input
           type="text"
@@ -135,7 +135,7 @@ const StyleForm: React.FC<StyleFormProps> = ({
           value={name}
           onChange={(e) => setName(e.target.value)}
           className={`w-full px-3 py-2 border ${errors.name ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'} rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white`}
-          placeholder="Enter a name for this style"
+          placeholder="Enter a title for this info"
         />
         {errors.name && <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.name}</p>}
       </div>
@@ -175,7 +175,7 @@ const StyleForm: React.FC<StyleFormProps> = ({
       {/* Pain Points */}
       <div className="mb-4">
         <label htmlFor="painPoints" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-          Pain Points
+          Pain Points/Interests of your Target Audience
         </label>
         <textarea
           id="painPoints"
@@ -239,7 +239,7 @@ const StyleForm: React.FC<StyleFormProps> = ({
           data-testid="submit-style-button"
           data-component-name="StyleForm"
         >
-          {isSubmitting ? 'Saving...' : initialStyle ? 'Update Style' : 'Create Style'}
+          {isSubmitting ? 'Saving...' : initialStyle ? 'Update Info' : 'Create Info'}
         </button>
       </div>
     </div>

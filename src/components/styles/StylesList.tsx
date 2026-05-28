@@ -43,7 +43,7 @@ const StylesList: React.FC<StylesListProps> = ({
   return (
     <div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {/* Create New Style Card */}
+        {/* Create New Info Card */}
         <div 
           onClick={onCreateNew}
           className="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow cursor-pointer h-full flex flex-col justify-center items-center p-8"
@@ -51,9 +51,9 @@ const StylesList: React.FC<StylesListProps> = ({
           <div className="w-16 h-16 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center mb-4">
             <FiPlus size={24} className="text-primary-600 dark:text-primary-400" />
           </div>
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Create New Style</h3>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Create New Info</h3>
           <p className="text-sm text-gray-600 dark:text-gray-400 text-center">
-            Add a custom writing style for your AI-generated content
+            Add custom info for your AI-generated content
           </p>
         </div>
         
@@ -72,7 +72,7 @@ const StylesList: React.FC<StylesListProps> = ({
       {styles.length === 0 && (
         <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-8 text-center mt-6">
           <p className="text-gray-600 dark:text-gray-400">
-            You haven't created any styles yet. Create your first style to get started!
+            You haven't created any info yet. Create your first one to get started!
           </p>
         </div>
       )}
