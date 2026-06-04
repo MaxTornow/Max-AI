@@ -47,6 +47,8 @@ export default async (request: Request) => {
       requestBody.max_tokens
     );
 
+    const isStream = requestBody?.stream === true;
+
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -58,6 +60,22 @@ export default async (request: Request) => {
     });
 
     console.log("Claude API response status:", response.status);
+
+    // When streaming, pipe Claude's SSE body straight through WITHOUT
+    // buffering. This keeps bytes flowing so Netlify doesn't hit its edge
+    // function time limit on large completions (the cause of the
+    // "edge function timed out" 500s on Script Rewriting AI).
+    if (isStream && response.ok && response.body) {
+      return new Response(response.body, {
+        status: response.status,
+        headers: {
+          "Content-Type":
+            response.headers.get("Content-Type") || "text/event-stream",
+          "Cache-Control": "no-cache",
+          "Access-Control-Allow-Origin": "*",
+        },
+      });
+    }
 
     const data = await response.text();
 

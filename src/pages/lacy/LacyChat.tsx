@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '@context/AuthContext';
 import { useStyles } from '@context/StylesContext';
-import { FiSend, FiPaperclip, FiZap } from 'react-icons/fi';
+import { FiSend, FiZap } from 'react-icons/fi';
 import { v4 as uuidv4 } from 'uuid';
 import { sendMessage, LacyMessage, getInitialGreeting } from '@services/lacy';
 import type { Style } from '@services/styles';
@@ -387,12 +387,6 @@ const LacyChat: React.FC = () => {
       {/* Chat input */}
       <div className="bg-white dark:bg-gray-800 p-4 border-t dark:border-gray-700">
         <form onSubmit={handleSendMessage} className="flex items-center space-x-2">
-          <button
-            type="button"
-            className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-          >
-            <FiPaperclip size={20} />
-          </button>
           <textarea
             ref={textareaRef}
             value={input}

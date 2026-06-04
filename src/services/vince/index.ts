@@ -60,17 +60,19 @@ export const getSubmagicProjectStatus = async (
 
   console.log('Checking Submagic project status:', projectId);
 
-  const response = await fetch(`${SUBMAGIC_API_URL}/projects/${projectId}`, {
-    method: 'GET',
-    headers: {
-      'x-api-key': SUBMAGIC_API_KEY,
+  // Use retryableFetch so a transient blip on a single poll (network error,
+  // 5xx, or 429) doesn't permanently stall the progress bar. Without this,
+  // one failed poll can stop polling entirely and freeze the UI at ~30%.
+  const response = await retryableFetch(
+    `${SUBMAGIC_API_URL}/projects/${projectId}`,
+    {
+      method: 'GET',
+      headers: {
+        'x-api-key': SUBMAGIC_API_KEY,
+      },
     },
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Failed to get project status: ${response.status} - ${errorText}`);
-  }
+    'Failed to get project status'
+  );
 
   const data = await response.json();
   console.log('Submagic project status:', data.status, 'downloadUrl:', data.downloadUrl, 'directUrl:', data.directUrl);

@@ -119,10 +119,19 @@ Provide the scripts in the following JSON format:
 }
 \`\`\``;
 
-    // Create controller for timeout handling
+    // Inactivity watchdog for the streamed response. We avoid a fixed total
+    // timeout because a long but healthy streamed generation can legitimately
+    // run past two minutes. Anthropic emits frequent ping/delta events, so a
+    // 60s silence means the stream has genuinely stalled and we abort.
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minute timeout for Claude API
-    
+    const STREAM_IDLE_TIMEOUT_MS = 60000;
+    let idleTimeoutId: ReturnType<typeof setTimeout> | undefined;
+    const resetIdleTimeout = () => {
+      clearTimeout(idleTimeoutId);
+      idleTimeoutId = setTimeout(() => controller.abort(), STREAM_IDLE_TIMEOUT_MS);
+    };
+    resetIdleTimeout();
+
     try {
       console.log('[DEBUG] Making request to Claude API via proxy');
       
@@ -135,6 +144,10 @@ Provide the scripts in the following JSON format:
           model: CLAUDE_CONFIG.MODEL,
           max_tokens: CLAUDE_CONFIG.MAX_TOKENS,
           temperature: CLAUDE_CONFIG.TEMPERATURE,
+          // Stream so the edge function returns bytes incrementally instead of
+          // buffering a large completion, which was tripping Netlify's edge
+          // function timeout and surfacing as a 500 "edge function timed out".
+          stream: true,
           messages: [
             {
               role: 'user',
@@ -145,8 +158,10 @@ Provide the scripts in the following JSON format:
         signal: controller.signal
       });
       
-      // Clear the timeout since the request completed
-      clearTimeout(timeoutId);
+      // Headers received. Disarm here so the status-code checks and any
+      // error-body reads below run unguarded (matching the original behavior);
+      // we re-arm just before consuming the stream.
+      clearTimeout(idleTimeoutId);
 
       console.log('[DEBUG] Claude API response status:', response.status, response.statusText);
       
@@ -186,10 +201,61 @@ Provide the scripts in the following JSON format:
         throw new Error(`HTTP_ERROR: Failed to generate scripts (${response.status}). ${errorText}`);
       }
 
-      const data = await response.json();
-      
-      // Parse the response content as JSON
-      const contentText = data.content[0].text;
+      // Read the streamed SSE response and accumulate the assistant text.
+      // Anthropic streaming emits `content_block_delta` events whose
+      // `delta.text` pieces concatenate into the full message.
+      if (!response.body) {
+        throw new Error('SERVER_ERROR: Claude API returned an empty streaming response.');
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let sseBuffer = '';
+      let contentText = '';
+
+      // Arm the inactivity watchdog for the stream read (covers time-to-first
+      // byte too, in case Claude is slow to start streaming).
+      resetIdleTimeout();
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        // Bytes arrived: reset the inactivity watchdog.
+        resetIdleTimeout();
+
+        sseBuffer += decoder.decode(value, { stream: true });
+        const lines = sseBuffer.split('\n');
+        // Keep the last (possibly partial) line in the buffer.
+        sseBuffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith('data:')) continue;
+
+          const payload = trimmed.slice(5).trim();
+          if (!payload || payload === '[DONE]') continue;
+
+          let event: any;
+          try {
+            event = JSON.parse(payload);
+          } catch {
+            // Ignore keep-alive / non-JSON lines.
+            continue;
+          }
+
+          if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
+            contentText += event.delta.text;
+          } else if (event.type === 'error') {
+            throw new Error(`SERVER_ERROR: Claude API streaming error. ${event.error?.message || 'Unknown streaming error'}`);
+          }
+        }
+      }
+
+      clearTimeout(idleTimeoutId);
+
+      if (!contentText) {
+        throw new Error('SERVER_ERROR: Claude API streaming response contained no content.');
+      }
       
       // Clean up markdown formatting if present
       let jsonText = contentText;
@@ -238,13 +304,13 @@ Provide the scripts in the following JSON format:
         throw new Error('PARSE_ERROR: Failed to parse Claude response as JSON. The response may not be in the expected format.');
       }
     } catch (fetchError: any) {
-      // Clear the timeout if it's still active
-      clearTimeout(timeoutId);
-      
+      // Clear the watchdog if it's still active
+      clearTimeout(idleTimeoutId);
+
       // Analyze the fetch error to provide more specific diagnostics
       if (fetchError.name === 'AbortError') {
-        console.error('[DEBUG] REQUEST TIMEOUT - The request to Claude API took too long to complete');
-        throw new Error('TIMEOUT: Claude API request timed out after 120 seconds');
+        console.error('[DEBUG] REQUEST TIMEOUT - The Claude API stream stalled with no data');
+        throw new Error('TIMEOUT: Claude API request timed out (stream stalled with no response)');
       } else if (fetchError.message?.includes('NetworkError') || fetchError.message?.includes('network')) {
         console.error('[DEBUG] NETWORK ERROR - There was a problem with the network connection to Claude API');
         throw new Error(`NETWORK_ERROR: Network error during Claude API request: ${fetchError.message}`);

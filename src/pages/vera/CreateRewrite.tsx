@@ -87,7 +87,7 @@ const CreateRewrite: React.FC = () => {
   // State for managing steps
   const [steps, setSteps] = useState<Step[]>([
     { id: 1, title: 'Paste the link to the video you want to have rewritten', isOpen: true, isCompleted: false },
-    { id: 2, title: 'Pick story and communication style', isOpen: false, isCompleted: false },
+    { id: 2, title: 'Pick story and communication info', isOpen: false, isCompleted: false },
     { id: 3, title: 'Generate script', isOpen: false, isCompleted: false },
   ]);
   
@@ -639,7 +639,7 @@ const CreateRewrite: React.FC = () => {
           onClick={() => toggleStep(2)}
         >
           <div className="flex items-center">
-            <span className="mr-2 font-medium">Step 2: Pick story and communication style</span>
+            <span className="mr-2 font-medium">Step 2: Pick story and communication info</span>
             {steps[1].isCompleted && (
               <span className="text-xs bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100 px-2 py-1 rounded-full">Completed</span>
             )}
@@ -652,7 +652,7 @@ const CreateRewrite: React.FC = () => {
             {/* Style Selection */}
             <div className="mb-6">
               <label htmlFor="styleSelect" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Choose a Style
+                Choose Info
               </label>
               <div className="flex items-center space-x-3">
                 <select
@@ -662,7 +662,7 @@ const CreateRewrite: React.FC = () => {
                   className="flex-1 p-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
                   disabled={isLoading || styles.length === 0}
                 >
-                  <option value="">Select a style...</option>
+                  <option value="">Select info...</option>
                   {styles.map(style => (
                     <option key={style.id} value={style.id}>
                       {style.name}
@@ -900,7 +900,7 @@ const CreateRewrite: React.FC = () => {
                       setSelectedStyleId('');
                       setSteps([
                         { id: 1, title: 'Paste the link to the video you want to have rewritten', isOpen: true, isCompleted: false },
-                        { id: 2, title: 'Pick story and communication style', isOpen: false, isCompleted: false },
+                        { id: 2, title: 'Pick story and communication info', isOpen: false, isCompleted: false },
                         { id: 3, title: 'Generate script', isOpen: false, isCompleted: false },
                       ]);
                     }}
