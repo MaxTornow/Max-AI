@@ -167,7 +167,7 @@ const StyleForm: React.FC<StyleFormProps> = ({
           value={targetAudience}
           onChange={(e) => setTargetAudience(e.target.value)}
           className={`w-full px-3 py-2 border ${errors.targetAudience ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'} rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white`}
-          placeholder="Describe who you want to make content for."
+          placeholder="Describe who you want to make content for (e.g. Busy Professionals aged 30-45)"
         />
         {errors.targetAudience && <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.targetAudience}</p>}
       </div>
