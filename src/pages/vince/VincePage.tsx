@@ -585,9 +585,7 @@ const VincePage: React.FC = () => {
         hookTitle: hookTitleEnabled
           ? (hookTitleText.trim()
             ? { text: hookTitleText.trim(), top: hookTitlePosition }
-            : hookTitlePosition !== 10
-              ? { top: hookTitlePosition }
-              : true)
+            : { top: hookTitlePosition })
           : undefined,
       });
 
