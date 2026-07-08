@@ -20,7 +20,7 @@ import {
   FiCheckCircle
 } from 'react-icons/fi';
 
-const FEEDBACK_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSf9dl7ODWMR2eqR1k1gbXr5N54ZJjDEiihsC-eOxugnNYMcXQ/viewform?usp=header';
+const FEEDBACK_FORM_URL = 'https://wf9284vfpt6.typeform.com/to/CyB3Rq4K';
 
 /**
  * Navigation item type - supports regular links and separators
