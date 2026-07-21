@@ -3,7 +3,15 @@ import { useAuth } from '@context/AuthContext';
 import { useStyles } from '@context/StylesContext';
 import { FiSend, FiZap } from 'react-icons/fi';
 import { v4 as uuidv4 } from 'uuid';
-import { sendMessage, AvaMessage, getInitialGreeting } from '@services/ava';
+import {
+  sendMessage,
+  AvaMessage,
+  getInitialGreeting,
+  saveMessage,
+  getLatestConversation,
+  getConversationMessages,
+  deleteConversation,
+} from '@services/ava';
 import type { Style } from '@services/styles';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -60,7 +68,8 @@ const AvaChat: React.FC = () => {
   });
   
   const [showStyleSelector, setShowStyleSelector] = useState(false);
-  
+  const [historyChecked, setHistoryChecked] = useState(false);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -71,6 +80,30 @@ const AvaChat: React.FC = () => {
 
   // We don't auto-select a style to be consistent with FRANCK and LACY components
 
+  // Try to resume the user's saved conversation from Supabase before falling
+  // back to a fresh greeting, so chats follow the client across devices.
+  useEffect(() => {
+    const loadRemoteHistory = async () => {
+      if (!user || historyChecked) return;
+      try {
+        const latest = await getLatestConversation(user);
+        if (latest) {
+          const remoteMessages = await getConversationMessages(latest.id, user);
+          if (remoteMessages.length > 0) {
+            setMessages(remoteMessages);
+            setConversationId(latest.id);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading conversation history from Supabase:', error);
+      } finally {
+        setHistoryChecked(true);
+      }
+    };
+
+    loadRemoteHistory();
+  }, [user, historyChecked]);
+
   // Load initial greeting when component mounts
   useEffect(() => {
     const loadInitialGreeting = async () => {
@@ -78,7 +111,12 @@ const AvaChat: React.FC = () => {
       if (messages.length > 0) {
         return;
       }
-      
+
+      // Wait for the Supabase history check to finish first
+      if (!historyChecked) {
+        return;
+      }
+
       if (user && !stylesLoading) {
         try {
           setIsLoading(true);
@@ -97,8 +135,11 @@ const AvaChat: React.FC = () => {
             role: 'assistant',
             timestamp: new Date(),
           };
-          
+
           setMessages([assistantMessage]);
+          saveMessage(convoId, assistantMessage, user).catch(err =>
+            console.error('Error saving greeting to Supabase:', err)
+          );
         } catch (error) {
           console.error('Error loading initial greeting:', error);
           
@@ -118,7 +159,7 @@ const AvaChat: React.FC = () => {
     };
     
     loadInitialGreeting();
-  }, [user, stylesLoading, messages.length, conversationId]);
+  }, [user, stylesLoading, messages.length, conversationId, historyChecked]);
   
   // Save messages to localStorage when they change
   useEffect(() => {
@@ -183,7 +224,13 @@ const AvaChat: React.FC = () => {
     
     try {
       setIsLoading(true);
-      
+
+      // Ensure we have a conversation ID to persist messages under
+      const convoId = conversationId || uuidv4();
+      if (!conversationId) {
+        setConversationId(convoId);
+      }
+
       // Add user message to the chat
       const userMessage: AvaMessage = {
         id: uuidv4(),
@@ -191,32 +238,30 @@ const AvaChat: React.FC = () => {
         role: 'user',
         timestamp: new Date(),
       };
-      
+
       setMessages(prev => [...prev, userMessage]);
-      
+      saveMessage(convoId, userMessage, user).catch(err =>
+        console.error('Error saving user message to Supabase:', err)
+      );
+
       // Clear input
       setInput('');
       if (textareaRef.current) {
         textareaRef.current.style.height = 'auto';
       }
-      
+
       // Get the selected style
       const selectedStyle = getSelectedStyle();
-      
+
       // Send the message to the AVA agent with the selected style
-      const response = await sendMessage(input, user, conversationId, selectedStyle);
-      
+      const response = await sendMessage(input, user, convoId, selectedStyle);
+
       console.log('Received response from AVA:', {
         outputLength: response.output.length,
         conversationId: response.conversation_id,
         selectedStyle: selectedStyle?.name
       });
-      
-      // Update conversation ID if needed
-      if (response.conversation_id) {
-        setConversationId(response.conversation_id);
-      }
-      
+
       // Add assistant message to the chat
       const assistantMessage: AvaMessage = {
         id: uuidv4(),
@@ -225,8 +270,11 @@ const AvaChat: React.FC = () => {
         timestamp: new Date(),
         search_results: response.search_results,
       };
-      
+
       setMessages(prev => [...prev, assistantMessage]);
+      saveMessage(convoId, assistantMessage, user).catch(err =>
+        console.error('Error saving assistant message to Supabase:', err)
+      );
     } catch (error) {
       console.error('Error sending message:', error);
       
@@ -266,15 +314,23 @@ const AvaChat: React.FC = () => {
    * Clear the conversation and start a new one
    */
   const clearConversation = () => {
+    const previousConversationId = conversationId;
+
     // Clear messages
     setMessages([]);
-    
+
     // Generate a new conversation ID
     setConversationId(uuidv4());
-    
+
     // Clear localStorage
     localStorage.removeItem('ava_messages');
     localStorage.removeItem('ava_conversation_id');
+
+    if (previousConversationId && user) {
+      deleteConversation(previousConversationId, user).catch(err =>
+        console.error('Error deleting conversation from Supabase:', err)
+      );
+    }
   };
 
   /**

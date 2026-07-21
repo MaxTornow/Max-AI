@@ -10,10 +10,11 @@ This folder contains all SQL scripts needed to set up the Supabase database and 
 | `002_styles.sql` | Writing styles for AI agents | In Production |
 | `003_rewrites.sql` | Content rewrites history | In Production |
 | `004_invitations.sql` | User invitation system | In Production |
-| `005_conversations.sql` | Chat conversations (future) | Ready for Use |
-| `006_messages.sql` | Chat messages (future) | Ready for Use |
+| `005_conversations.sql` | Chat conversations | In Production |
+| `006_messages.sql` | Chat messages | In Production |
 | `007_videos.sql` | BETTY video records | In Production |
 | `008_videos_storage_policies.sql` | Storage bucket RLS policies | **REQUIRED** |
+| `011_expand_conversation_agent_types.sql` | Allow 'sage'/'aimax' as agent_type | **REQUIRED** (run once on existing databases) |
 
 ## Running Order
 

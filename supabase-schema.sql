@@ -147,7 +147,7 @@ CREATE TABLE IF NOT EXISTS public.conversations (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
-  agent_type TEXT NOT NULL CHECK (agent_type IN ('ava', 'vera', 'lara', 'lacy', 'franck', 'faris')),
+  agent_type TEXT NOT NULL CHECK (agent_type IN ('ava', 'vera', 'lara', 'lacy', 'franck', 'faris', 'sage', 'aimax')),
   is_archived BOOLEAN DEFAULT false NOT NULL
 );
 

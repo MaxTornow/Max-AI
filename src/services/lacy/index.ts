@@ -309,143 +309,116 @@ export const sendMessage = async (
 };
 
 /**
- * Save a conversation to the database
+ * Ensure the conversation row exists, then persist a single message to it.
+ * Uses the real conversations + messages tables (RLS-scoped to the user).
  * @param conversationId - The conversation ID
- * @param messages - The messages in the conversation
+ * @param message - The message to persist
  * @param user - The authenticated user
- * @returns Promise with the saved conversation
  */
-export const saveConversation = async (
+export const saveMessage = async (
   conversationId: string,
-  messages: LacyMessage[],
+  message: LacyMessage,
   user: User | null
 ): Promise<void> => {
   if (!user) {
     throw new Error('Authentication required. Please log in to continue.');
   }
-  
+
   try {
-    console.log(`Saving conversation ${conversationId} with ${messages.length} messages`);
-    
-    // Save to localStorage as a fallback
-    try {
-      localStorage.setItem('lacy_messages', JSON.stringify(messages));
-      localStorage.setItem('lacy_conversation_id', conversationId);
-    } catch (localStorageError) {
-      console.warn('Could not save to localStorage:', localStorageError);
-    }
-    
-    // Try to save to Supabase, but don't block if it fails
-    const { error } = await supabase
+    const { error: conversationError } = await supabase
       .from('conversations')
       .upsert({
         id: conversationId,
         user_id: user.id,
-        messages: messages.map(msg => ({
-          id: msg.id,
-          content: msg.content,
-          role: msg.role,
-          timestamp: msg.timestamp.toISOString(),
-          search_results: msg.search_results || null,
-        })),
+        title: 'LACY Chat',
+        agent_type: 'lacy',
         updated_at: new Date().toISOString(),
       });
-    
-    if (error) {
-      console.error('Error saving conversation to Supabase:', error);
-      // Don't throw here, we've already saved to localStorage
-    } else {
-      console.log('Conversation saved successfully to Supabase');
-    }
+
+    if (conversationError) throw conversationError;
+
+    const { error: messageError } = await supabase
+      .from('messages')
+      .insert({
+        id: message.id,
+        conversation_id: conversationId,
+        content: message.content,
+        role: message.role,
+      });
+
+    if (messageError) throw messageError;
   } catch (error) {
-    console.error('Error in saveConversation:', error);
-    // We're still throwing here to maintain the expected behavior for callers
-    // that expect to catch this error, but we've already saved to localStorage
-    throw new Error('Failed to save conversation. Please try again.');
+    console.error('Error saving message to Supabase:', error);
+    throw new Error('Failed to save message. Please try again.');
   }
 };
 
 /**
- * Get a conversation from the database
+ * Get all messages for a conversation, oldest first
  * @param conversationId - The conversation ID
  * @param user - The authenticated user
- * @returns Promise with the conversation messages
  */
-export const getConversation = async (
+export const getConversationMessages = async (
   conversationId: string,
   user: User | null
 ): Promise<LacyMessage[]> => {
   if (!user) {
     throw new Error('Authentication required. Please log in to continue.');
   }
-  
+
   try {
-    console.log(`Getting conversation: ${conversationId}`);
-    
     const { data, error } = await supabase
-      .from('conversations')
-      .select('messages')
-      .eq('id', conversationId)
-      .eq('user_id', user.id)
-      .single();
-    
-    if (error) {
-      console.error('Error getting conversation:', error);
-      throw error;
-    }
-    
-    console.log(`Retrieved conversation with ${data?.messages?.length || 0} messages`);
-    
-    // Convert the messages to LacyMessage objects
-    return (data?.messages || []).map((msg: any) => ({
+      .from('messages')
+      .select('id, content, role, created_at')
+      .eq('conversation_id', conversationId)
+      .order('created_at', { ascending: true });
+
+    if (error) throw error;
+
+    return (data || []).map((msg: any) => ({
       id: msg.id,
       content: msg.content,
       role: msg.role,
-      timestamp: new Date(msg.timestamp),
-      search_results: msg.search_results || undefined,
+      timestamp: new Date(msg.created_at),
     }));
   } catch (error) {
-    console.error('Error getting conversation:', error);
+    console.error('Error getting conversation messages:', error);
     throw new Error('Failed to load conversation. Please try again.');
   }
 };
 
 /**
- * Get all conversations for a user
+ * Get the most recently updated LACY conversation for this user, if any
  * @param user - The authenticated user
- * @returns Promise with the conversations
  */
-export const getConversations = async (
+export const getLatestConversation = async (
   user: User | null
-): Promise<{ id: string; updated_at: string }[]> => {
+): Promise<{ id: string; updated_at: string } | null> => {
   if (!user) {
     throw new Error('Authentication required. Please log in to continue.');
   }
-  
+
   try {
-    console.log('Getting all conversations for user:', user.id);
-    
     const { data, error } = await supabase
       .from('conversations')
       .select('id, updated_at')
       .eq('user_id', user.id)
-      .order('updated_at', { ascending: false });
-    
-    if (error) {
-      console.error('Error getting conversations:', error);
-      throw error;
-    }
-    
-    console.log(`Retrieved ${data?.length || 0} conversations`);
-    return data || [];
+      .eq('agent_type', 'lacy')
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) throw error;
+
+    return data;
   } catch (error) {
-    console.error('Error getting conversations:', error);
-    throw new Error('Failed to load conversations. Please try again.');
+    console.error('Error getting latest conversation:', error);
+    throw new Error('Failed to load conversation history. Please try again.');
   }
 };
 
 /**
- * Delete a conversation
+ * Delete a conversation (and its messages, via cascade)
  * @param conversationId - The conversation ID
  * @param user - The authenticated user
  */
@@ -456,22 +429,15 @@ export const deleteConversation = async (
   if (!user) {
     throw new Error('Authentication required. Please log in to continue.');
   }
-  
+
   try {
-    console.log(`Deleting conversation: ${conversationId}`);
-    
     const { error } = await supabase
       .from('conversations')
       .delete()
       .eq('id', conversationId)
       .eq('user_id', user.id);
-    
-    if (error) {
-      console.error('Error deleting conversation:', error);
-      throw error;
-    }
-    
-    console.log('Conversation deleted successfully');
+
+    if (error) throw error;
   } catch (error) {
     console.error('Error deleting conversation:', error);
     throw new Error('Failed to delete conversation. Please try again.');
