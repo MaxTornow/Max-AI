@@ -3,7 +3,15 @@ import { useAuth } from '@context/AuthContext';
 import { useStyles } from '@context/StylesContext';
 import { FiSend, FiClipboard, FiCheckCircle } from 'react-icons/fi';
 import { v4 as uuidv4 } from 'uuid';
-import { sendMessage, SageMessage, getInitialGreeting } from '@services/sage';
+import {
+  sendMessage,
+  SageMessage,
+  getInitialGreeting,
+  saveMessage,
+  getLatestConversation,
+  getConversationMessages,
+  deleteConversation,
+} from '@services/sage';
 import type { Style } from '@services/styles';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -54,12 +62,38 @@ const SageChat: React.FC = () => {
     }
   });
 
+  const [historyChecked, setHistoryChecked] = useState(false);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Try to resume the user's saved conversation from Supabase before falling
+  // back to a fresh greeting, so chats follow the client across devices.
+  useEffect(() => {
+    const loadRemoteHistory = async () => {
+      if (!user || historyChecked) return;
+      try {
+        const latest = await getLatestConversation(user);
+        if (latest) {
+          const remoteMessages = await getConversationMessages(latest.id, user);
+          if (remoteMessages.length > 0) {
+            setMessages(remoteMessages);
+            setConversationId(latest.id);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading conversation history from Supabase:', error);
+      } finally {
+        setHistoryChecked(true);
+      }
+    };
+
+    loadRemoteHistory();
+  }, [user, historyChecked]);
 
   useEffect(() => {
     try {
@@ -97,7 +131,7 @@ const SageChat: React.FC = () => {
 
   useEffect(() => {
     const loadInitialGreeting = async () => {
-      if (messages.length === 0 && user) {
+      if (messages.length === 0 && user && historyChecked) {
         try {
           setIsLoading(true);
           const response = await getInitialGreeting(user);
@@ -111,6 +145,9 @@ const SageChat: React.FC = () => {
 
           setMessages([greetingMessage]);
           setConversationId(response.conversation_id);
+          saveMessage(response.conversation_id, greetingMessage, user).catch(err =>
+            console.error('Error saving greeting to Supabase:', err)
+          );
         } catch (error) {
           console.error('Error loading initial greeting:', error);
 
@@ -129,12 +166,17 @@ const SageChat: React.FC = () => {
     };
 
     loadInitialGreeting();
-  }, [messages.length, user]);
+  }, [messages.length, user, historyChecked]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!input.trim() || isLoading) return;
+
+    const convoId = conversationId || uuidv4();
+    if (!conversationId) {
+      setConversationId(convoId);
+    }
 
     const userMessage: SageMessage = {
       id: uuidv4(),
@@ -144,6 +186,9 @@ const SageChat: React.FC = () => {
     };
 
     setMessages(prev => [...prev, userMessage]);
+    saveMessage(convoId, userMessage, user).catch(err =>
+      console.error('Error saving user message to Supabase:', err)
+    );
     setInput('');
     setIsLoading(true);
 
@@ -156,7 +201,7 @@ const SageChat: React.FC = () => {
       const response = await sendMessage(
         input,
         user,
-        conversationId,
+        convoId,
         selectedStyle
       );
 
@@ -169,10 +214,9 @@ const SageChat: React.FC = () => {
       };
 
       setMessages(prev => [...prev, assistantMessage]);
-
-      if (response.conversation_id !== conversationId) {
-        setConversationId(response.conversation_id);
-      }
+      saveMessage(convoId, assistantMessage, user).catch(err =>
+        console.error('Error saving assistant message to Supabase:', err)
+      );
     } catch (error) {
       console.error('Error sending message:', error);
 
@@ -192,6 +236,11 @@ const SageChat: React.FC = () => {
   const handleQuickAction = async (message: string) => {
     if (isLoading) return;
 
+    const convoId = conversationId || uuidv4();
+    if (!conversationId) {
+      setConversationId(convoId);
+    }
+
     const userMessage: SageMessage = {
       id: uuidv4(),
       content: message,
@@ -200,13 +249,16 @@ const SageChat: React.FC = () => {
     };
 
     setMessages(prev => [...prev, userMessage]);
+    saveMessage(convoId, userMessage, user).catch(err =>
+      console.error('Error saving user message to Supabase:', err)
+    );
     setIsLoading(true);
 
     try {
       const response = await sendMessage(
         message,
         user,
-        conversationId,
+        convoId,
         selectedStyle
       );
 
@@ -219,10 +271,9 @@ const SageChat: React.FC = () => {
       };
 
       setMessages(prev => [...prev, assistantMessage]);
-
-      if (response.conversation_id !== conversationId) {
-        setConversationId(response.conversation_id);
-      }
+      saveMessage(convoId, assistantMessage, user).catch(err =>
+        console.error('Error saving assistant message to Supabase:', err)
+      );
     } catch (error) {
       console.error('Error sending quick action:', error);
 
@@ -240,9 +291,16 @@ const SageChat: React.FC = () => {
   };
 
   const clearConversation = () => {
+    const previousConversationId = conversationId;
     setMessages([]);
     setConversationId(undefined);
     setSelectedStyleId(undefined);
+
+    if (previousConversationId && user) {
+      deleteConversation(previousConversationId, user).catch(err =>
+        console.error('Error deleting conversation from Supabase:', err)
+      );
+    }
   };
 
   const handlePasteFromClipboard = async () => {
