@@ -3,7 +3,15 @@ import { useAuth } from '@context/AuthContext';
 import { useStyles } from '@context/StylesContext';
 import { FiSend, FiZap } from 'react-icons/fi';
 import { v4 as uuidv4 } from 'uuid';
-import { sendMessage, LacyMessage, getInitialGreeting } from '@services/lacy';
+import {
+  sendMessage,
+  LacyMessage,
+  getInitialGreeting,
+  saveMessage,
+  getLatestConversation,
+  getConversationMessages,
+  deleteConversation,
+} from '@services/lacy';
 import type { Style } from '@services/styles';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -59,14 +67,40 @@ const LacyChat: React.FC = () => {
     }
   });
   
+  const [historyChecked, setHistoryChecked] = useState(false);
+
   // Ref for auto-scrolling
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  
+
   // Auto-scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Try to resume the user's saved conversation from Supabase before falling
+  // back to a fresh greeting, so chats follow the client across devices.
+  useEffect(() => {
+    const loadRemoteHistory = async () => {
+      if (!user || historyChecked) return;
+      try {
+        const latest = await getLatestConversation(user);
+        if (latest) {
+          const remoteMessages = await getConversationMessages(latest.id, user);
+          if (remoteMessages.length > 0) {
+            setMessages(remoteMessages);
+            setConversationId(latest.id);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading conversation history from Supabase:', error);
+      } finally {
+        setHistoryChecked(true);
+      }
+    };
+
+    loadRemoteHistory();
+  }, [user, historyChecked]);
   
   // Save messages to localStorage whenever they change
   useEffect(() => {
@@ -109,20 +143,23 @@ const LacyChat: React.FC = () => {
   // Load initial greeting if no messages exist
   useEffect(() => {
     const loadInitialGreeting = async () => {
-      if (messages.length === 0 && user) {
+      if (messages.length === 0 && user && historyChecked) {
         try {
           setIsLoading(true);
           const response = await getInitialGreeting(user);
-          
+
           const greetingMessage: LacyMessage = {
             id: uuidv4(),
             content: response.output,
             role: 'assistant',
             timestamp: new Date(),
           };
-          
+
           setMessages([greetingMessage]);
           setConversationId(response.conversation_id);
+          saveMessage(response.conversation_id, greetingMessage, user).catch(err =>
+            console.error('Error saving greeting to Supabase:', err)
+          );
         } catch (error) {
           console.error('Error loading initial greeting:', error);
           
@@ -142,36 +179,44 @@ const LacyChat: React.FC = () => {
     };
     
     loadInitialGreeting();
-  }, [messages.length, user]);
-  
+  }, [messages.length, user, historyChecked]);
+
   // Handle sending a message
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!input.trim() || isLoading) return;
-    
+
+    const convoId = conversationId || uuidv4();
+    if (!conversationId) {
+      setConversationId(convoId);
+    }
+
     const userMessage: LacyMessage = {
       id: uuidv4(),
       content: input,
       role: 'user',
       timestamp: new Date(),
     };
-    
+
     setMessages(prev => [...prev, userMessage]);
+    saveMessage(convoId, userMessage, user).catch(err =>
+      console.error('Error saving user message to Supabase:', err)
+    );
     setInput('');
     setIsLoading(true);
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
-    
+
     try {
       const response = await sendMessage(
         input,
         user,
-        conversationId,
+        convoId,
         selectedStyle
       );
-      
+
       const assistantMessage: LacyMessage = {
         id: uuidv4(),
         content: response.output,
@@ -179,13 +224,11 @@ const LacyChat: React.FC = () => {
         timestamp: new Date(),
         search_results: response.search_results,
       };
-      
+
       setMessages(prev => [...prev, assistantMessage]);
-      
-      // Update conversation ID if it changed
-      if (response.conversation_id !== conversationId) {
-        setConversationId(response.conversation_id);
-      }
+      saveMessage(convoId, assistantMessage, user).catch(err =>
+        console.error('Error saving assistant message to Supabase:', err)
+      );
     } catch (error) {
       console.error('Error sending message:', error);
       
@@ -205,25 +248,33 @@ const LacyChat: React.FC = () => {
   // Handle quick action
   const handleQuickAction = async (message: string) => {
     if (isLoading) return;
-    
+
+    const convoId = conversationId || uuidv4();
+    if (!conversationId) {
+      setConversationId(convoId);
+    }
+
     const userMessage: LacyMessage = {
       id: uuidv4(),
       content: message,
       role: 'user',
       timestamp: new Date(),
     };
-    
+
     setMessages(prev => [...prev, userMessage]);
+    saveMessage(convoId, userMessage, user).catch(err =>
+      console.error('Error saving user message to Supabase:', err)
+    );
     setIsLoading(true);
-    
+
     try {
       const response = await sendMessage(
         message,
         user,
-        conversationId,
+        convoId,
         selectedStyle
       );
-      
+
       const assistantMessage: LacyMessage = {
         id: uuidv4(),
         content: response.output,
@@ -231,13 +282,11 @@ const LacyChat: React.FC = () => {
         timestamp: new Date(),
         search_results: response.search_results,
       };
-      
+
       setMessages(prev => [...prev, assistantMessage]);
-      
-      // Update conversation ID if it changed
-      if (response.conversation_id !== conversationId) {
-        setConversationId(response.conversation_id);
-      }
+      saveMessage(convoId, assistantMessage, user).catch(err =>
+        console.error('Error saving assistant message to Supabase:', err)
+      );
     } catch (error) {
       console.error('Error sending quick action:', error);
       
@@ -256,9 +305,16 @@ const LacyChat: React.FC = () => {
   
   // Clear conversation
   const clearConversation = () => {
+    const previousConversationId = conversationId;
     setMessages([]);
     setConversationId(undefined);
     setSelectedStyleId(undefined);
+
+    if (previousConversationId && user) {
+      deleteConversation(previousConversationId, user).catch(err =>
+        console.error('Error deleting conversation from Supabase:', err)
+      );
+    }
   };
   
   return (
