@@ -20,6 +20,10 @@ interface FastSaverResponse {
   height?: number;
   duration?: number;
   caption?: string;
+  // Present when ok is false - exact field name varies by failure mode
+  error?: string;
+  message?: string;
+  detail?: string;
 }
 
 /**
@@ -81,13 +85,20 @@ export const getInstagramVideoInfo = async (url: string): Promise<InstagramVideo
     console.log('[DEBUG] getInstagramVideoInfo - Response status:', response.status, response.statusText);
     console.log('[DEBUG] getInstagramVideoInfo - Response headers:', JSON.stringify(Object.fromEntries([...response.headers])));
 
-    if (!response.ok) {
-      throw new Error(`Failed to fetch Instagram video info: ${response.status} ${response.statusText}`);
-    }
-
     console.log('[DEBUG] getInstagramVideoInfo - Parsing response JSON...');
-    const data: FastSaverResponse = await response.json();
+    const data: FastSaverResponse = await response.json().catch(() => null as unknown as FastSaverResponse);
     console.log('[DEBUG] getInstagramVideoInfo - Response data:', JSON.stringify(data, null, 2));
+
+    const apiReason = data?.error || data?.message || data?.detail;
+
+    if (!response.ok) {
+      // Surface the API's own reason (e.g. invalid/expired key, rate limit, post not found)
+      // instead of a bare status code, so the underlying cause is diagnosable from the UI.
+      throw new Error(
+        `Failed to fetch Instagram video info (${response.status} ${response.statusText})` +
+          (apiReason ? `: ${apiReason}` : '')
+      );
+    }
 
     // NEW: Validate using 'ok' field instead of checking for 'error'
     console.log('[DEBUG] getInstagramVideoInfo - Validating response data...');
@@ -96,7 +107,9 @@ export const getInstagramVideoInfo = async (url: string): Promise<InstagramVideo
     console.log('[DEBUG] getInstagramVideoInfo - Has download_url:', data && !!data.download_url);
 
     if (!data || !data.ok || !data.download_url) {
-      throw new Error('Invalid response from FastSaver API: Missing download URL or request failed');
+      throw new Error(
+        `Invalid response from FastSaver API: ${apiReason || 'missing download URL or request failed'}`
+      );
     }
 
     // Map to existing interface for backward compatibility
@@ -115,6 +128,12 @@ export const getInstagramVideoInfo = async (url: string): Promise<InstagramVideo
       console.error('[DEBUG] getInstagramVideoInfo - Unknown error type:', typeof error);
     }
     console.error('Error fetching Instagram video info:', error);
+    // Re-throw Errors as-is - the specific reason (bad URL, expired API key, rate limit,
+    // etc.) was already attached above and is what shows up in the Step 3 error box, so
+    // it needs to stay diagnosable instead of being masked by a single generic message.
+    if (error instanceof Error) {
+      throw error;
+    }
     throw new Error('Failed to fetch Instagram video info. Please check the URL and try again.');
   }
 };

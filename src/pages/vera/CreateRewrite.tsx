@@ -75,6 +75,10 @@ const formatTimeRemaining = (seconds: number): string => {
   }
 };
 
+// Temporary kill switch while the Instagram video fetch issue is being fixed.
+// Flip back to false to restore normal access.
+const MAINTENANCE_MODE = true;
+
 /**
  * Create Rewrite component for VERA
  * @returns {JSX.Element} Create Rewrite page
@@ -172,6 +176,21 @@ const CreateRewrite: React.FC = () => {
 
     fetchRewrites();
   }, [user]);
+
+  if (MAINTENANCE_MODE) {
+    return (
+      <div className="container mx-auto px-4 py-6">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Script Rewriting AI</h1>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-8 text-center">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Under maintenance</h2>
+          <p className="text-gray-600 dark:text-gray-300 max-w-xl mx-auto">
+            Script Rewriting AI is temporarily unavailable while we fix an issue with video fetching.
+            Please give us 24 hours to address it — we're on it and it'll be back shortly.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   /**
    * Toggle step collapse/expand
