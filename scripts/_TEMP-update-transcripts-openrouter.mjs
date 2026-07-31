@@ -1,21 +1,26 @@
 #!/usr/bin/env node
 
 /**
- * TEMPORARY one-off fork of update-transcripts.mjs — OpenRouter variant
+ * TEMPORARY one-off ADDITIVE-ONLY script — OpenRouter variant
  * ============================================================
  * DELETE THIS FILE after the run it was created for. Do not adopt it as
  * a permanent tool. update-transcripts.mjs stays the canonical script
- * and continues to hit api.openai.com directly.
+ * and continues to hit api.openai.com directly, with its
+ * delete-then-replace semantics unchanged.
  *
- * Why this exists: no working OPENAI_API_KEY was available for a live
- * VGA update, but OPENROUTER_API_KEY is. A same-content cosine
- * similarity check (see scripts/check-openrouter-embedding-match.mjs)
- * confirmed OpenRouter's "openai/text-embedding-3-small" is a faithful
- * passthrough (1.000000 similarity) to the model already used for the
- * existing 622 VGA rows, so embeddings produced here land in the same
- * vector space. Only the embedding call differs from
- * update-transcripts.mjs — CSV parsing, chunking, and the
- * delete-then-insert course logic are unchanged.
+ * This is NOT a fork of update-transcripts.mjs's course-replace
+ * behavior. This CSV contains only 4 new videos, not a full course
+ * export — a delete-then-insert against a partial CSV would destroy the
+ * other ~622 existing chunks. This script skips the delete step
+ * entirely and only INSERTs the new chunks on top of what's already
+ * there.
+ *
+ * Why OpenRouter: no working OPENAI_API_KEY was available for this
+ * update, but OPENROUTER_API_KEY is. A same-content cosine similarity
+ * check (see scripts/check-openrouter-embedding-match.mjs) confirmed
+ * OpenRouter's "openai/text-embedding-3-small" is a faithful passthrough
+ * (1.000000 similarity) to the model already used for the existing 622
+ * VGA rows, so embeddings produced here land in the same vector space.
  *
  * Usage:
  *   node scripts/_TEMP-update-transcripts-openrouter.mjs --course "VGA" path/to/file.csv
@@ -262,30 +267,16 @@ async function main() {
   console.log(`  Supabase:   ${totalDocs} total documents`);
   console.log(`  OpenRouter: ${EMBEDDING_DIMS}-dim embeddings OK`);
 
-  // Delete existing documents for THIS course only
-  console.log(`\nDeleting existing "${COURSE}" documents...`);
-  const { error: delErr, count: delCount } = await supabase
+  const { count: existingCourseCount, error: existingErr } = await supabase
     .from('documents')
-    .delete({ count: 'exact' })
+    .select('*', { count: 'exact', head: true })
     .eq('metadata->>course', COURSE);
+  if (existingErr) throw new Error(`Course count check failed: ${existingErr.message}`);
+  console.log(`  Existing "${COURSE}" documents (will NOT be touched): ${existingCourseCount}`);
 
-  // Fallback: if no course tag existed (legacy data), delete all if this is the only course
-  if (delCount === 0 && totalDocs > 0) {
-    console.log(`  No documents tagged with course="${COURSE}".`);
-    console.log(`  Found ${totalDocs} untagged documents. Deleting all (legacy migration)...`);
-    const { error: delAllErr, count: delAllCount } = await supabase
-      .from('documents')
-      .delete({ count: 'exact' })
-      .gte('id', 0);
-    if (delAllErr) throw new Error(`Delete failed: ${delAllErr.message}`);
-    console.log(`  Deleted ${delAllCount ?? '?'} legacy rows`);
-  } else {
-    if (delErr) throw new Error(`Delete failed: ${delErr.message}`);
-    console.log(`  Deleted ${delCount ?? 0} rows`);
-  }
-
-  // Insert in batches with embeddings
-  console.log(`\nInserting ${allChunks.length} chunks (batch size ${BATCH_SIZE})...`);
+  // ADDITIVE ONLY — no delete step. This CSV is a partial set of new
+  // videos, not a full course export, so existing rows are left as-is.
+  console.log(`\nInserting ${allChunks.length} new chunks (batch size ${BATCH_SIZE})...`);
   let inserted = 0;
 
   for (let i = 0; i < allChunks.length; i += BATCH_SIZE) {
@@ -318,8 +309,11 @@ async function main() {
     .from('documents')
     .select('*', { count: 'exact', head: true });
 
-  console.log(`  "${COURSE}" documents: ${newCount}`);
+  console.log(`  "${COURSE}" documents: ${existingCourseCount} existing + ${inserted} new = ${newCount}`);
   console.log(`  Total documents:       ${newTotal}`);
+  if (newCount !== existingCourseCount + allChunks.length) {
+    console.log(`  WARNING: expected ${existingCourseCount + allChunks.length}, got ${newCount} — investigate before trusting this data.`);
+  }
   console.log(`\nDone!`);
 }
 
