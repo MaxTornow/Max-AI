@@ -76,10 +76,12 @@ const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+// Supabase creds are required even for --dry-run, since dry-run does a
+// real (read-only) existing-row-count check against the live table.
+if (!SUPABASE_URL) throw new Error('Missing SUPABASE_URL (or VITE_SUPABASE_URL)');
+if (!SUPABASE_KEY) throw new Error('Missing SUPABASE_SERVICE_ROLE_KEY');
 if (!DRY_RUN) {
   if (!OPENROUTER_API_KEY) throw new Error('Missing OPENROUTER_API_KEY');
-  if (!SUPABASE_URL) throw new Error('Missing SUPABASE_URL (or VITE_SUPABASE_URL)');
-  if (!SUPABASE_KEY) throw new Error('Missing SUPABASE_SERVICE_ROLE_KEY');
 }
 
 // ── CSV Parser (handles quoted fields with embedded newlines) ───────
@@ -248,24 +250,17 @@ async function main() {
   console.log(`\nChunk stats: avg=${Math.round(totalChars / lengths.length)} min=${Math.min(...lengths)} max=${Math.max(...lengths)}`);
   console.log(`Embedding cost estimate: ~$${(estTokens * 0.02 / 1_000_000).toFixed(4)} (${estTokens} tokens)`);
 
-  if (DRY_RUN) {
-    console.log('\n--dry-run: stopping before database operations');
-    return;
-  }
-
+  // Real (read-only) Supabase check, run in BOTH dry-run and live mode,
+  // so --dry-run actually confirms the live existing-row count rather
+  // than only validating local CSV chunking.
   const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-  // Test connections
-  console.log('\nTesting connections...');
+  console.log('\nChecking Supabase...');
   const { count: totalDocs, error: countErr } = await supabase
     .from('documents')
     .select('*', { count: 'exact', head: true });
   if (countErr) throw new Error(`Supabase connection failed: ${countErr.message}`);
-
-  const testEmb = await getEmbeddings(['connection test']);
-  if (testEmb[0].length !== EMBEDDING_DIMS) throw new Error(`Expected ${EMBEDDING_DIMS} dims, got ${testEmb[0].length}`);
-  console.log(`  Supabase:   ${totalDocs} total documents`);
-  console.log(`  OpenRouter: ${EMBEDDING_DIMS}-dim embeddings OK`);
+  console.log(`  Total documents:                     ${totalDocs}`);
 
   const { count: existingCourseCount, error: existingErr } = await supabase
     .from('documents')
@@ -273,6 +268,19 @@ async function main() {
     .eq('metadata->>course', COURSE);
   if (existingErr) throw new Error(`Course count check failed: ${existingErr.message}`);
   console.log(`  Existing "${COURSE}" documents (will NOT be touched): ${existingCourseCount}`);
+  console.log(`  Would insert:                        ${allChunks.length} new chunks`);
+  console.log(`  Expected "${COURSE}" total after run:   ${existingCourseCount + allChunks.length}`);
+
+  if (DRY_RUN) {
+    console.log('\n--dry-run: confirmed existing-row count above, stopping before OpenRouter calls and any writes');
+    return;
+  }
+
+  // Test OpenRouter connection
+  console.log('\nTesting OpenRouter...');
+  const testEmb = await getEmbeddings(['connection test']);
+  if (testEmb[0].length !== EMBEDDING_DIMS) throw new Error(`Expected ${EMBEDDING_DIMS} dims, got ${testEmb[0].length}`);
+  console.log(`  OpenRouter: ${EMBEDDING_DIMS}-dim embeddings OK`);
 
   // ADDITIVE ONLY — no delete step. This CSV is a partial set of new
   // videos, not a full course export, so existing rows are left as-is.
