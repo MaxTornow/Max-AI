@@ -1,6 +1,6 @@
 import React from 'react';
-import { FiZoomIn, FiImage, FiGlobe, FiClock, FiFilter, FiType } from 'react-icons/fi';
-import { SUPPORTED_LANGUAGES, SILENCE_PACE_OPTIONS, SilencePace } from '@services/vince/types';
+import { FiZoomIn, FiImage, FiGlobe, FiClock, FiFilter, FiType, FiMove } from 'react-icons/fi';
+import { SUPPORTED_LANGUAGES, SILENCE_PACE_OPTIONS, SilencePace, CAPTION_POSITION_X_DEFAULT, CAPTION_POSITION_Y_DEFAULT } from '@services/vince/types';
 
 interface FeatureTogglesProps {
   magicZooms: boolean;
@@ -23,6 +23,12 @@ interface FeatureTogglesProps {
   onHookTitleEnabledChange: (value: boolean) => void;
   onHookTitleTextChange: (value: string) => void;
   onHookTitlePositionChange: (value: number) => void;
+  // Body caption position props (null = user hasn't touched the slider yet,
+  // so nothing is sent to Submagic and it applies its own default)
+  captionPositionX: number | null;
+  captionPositionY: number | null;
+  onCaptionPositionXChange: (value: number) => void;
+  onCaptionPositionYChange: (value: number) => void;
 }
 
 /**
@@ -49,6 +55,10 @@ const FeatureToggles: React.FC<FeatureTogglesProps> = ({
   onHookTitleEnabledChange,
   onHookTitleTextChange,
   onHookTitlePositionChange,
+  captionPositionX,
+  captionPositionY,
+  onCaptionPositionXChange,
+  onCaptionPositionYChange,
 }) => {
   return (
     <div className="w-full space-y-4">
@@ -125,6 +135,7 @@ const FeatureToggles: React.FC<FeatureTogglesProps> = ({
           </div>
           <input
             type="range"
+            aria-label="B-roll percentage"
             min="0"
             max="100"
             step="5"
@@ -281,6 +292,67 @@ const FeatureToggles: React.FC<FeatureTogglesProps> = ({
             </div>
           </>
         )}
+      </div>
+
+      {/* Body Caption Position — ranges confirmed via live Submagic API testing (Aug 1, 2026): X is 0-100, Y is 0-80 */}
+      <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg space-y-3">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-teal-100 dark:bg-teal-900/40 flex items-center justify-center">
+            <FiMove className="w-5 h-5 text-teal-600 dark:text-teal-400" />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-gray-900 dark:text-white">
+              Caption Position
+            </p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Move the body captions on screen (leave untouched for Submagic's default)
+            </p>
+          </div>
+        </div>
+
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-xs font-medium text-gray-600 dark:text-gray-400">
+              Horizontal
+            </label>
+            <span className="text-sm font-medium text-primary-600 dark:text-primary-400">
+              {captionPositionX ?? 'Default'}
+            </span>
+          </div>
+          <input
+            type="range"
+            aria-label="Caption horizontal position"
+            min="0"
+            max="100"
+            step="1"
+            value={captionPositionX ?? CAPTION_POSITION_X_DEFAULT}
+            onChange={(e) => onCaptionPositionXChange(parseInt(e.target.value))}
+            disabled={disabled}
+            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-primary-600"
+          />
+        </div>
+
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-xs font-medium text-gray-600 dark:text-gray-400">
+              Vertical
+            </label>
+            <span className="text-sm font-medium text-primary-600 dark:text-primary-400">
+              {captionPositionY ?? 'Default'}
+            </span>
+          </div>
+          <input
+            type="range"
+            aria-label="Caption vertical position"
+            min="0"
+            max="80"
+            step="1"
+            value={captionPositionY ?? CAPTION_POSITION_Y_DEFAULT}
+            onChange={(e) => onCaptionPositionYChange(parseInt(e.target.value))}
+            disabled={disabled}
+            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-primary-600"
+          />
+        </div>
       </div>
 
       {/* Language Selector */}

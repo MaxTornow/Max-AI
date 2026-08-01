@@ -46,6 +46,8 @@ interface VinceSettings {
   hookTitleEnabled: boolean;
   hookTitleText: string;
   hookTitlePosition: number;
+  captionPositionX: number | null;
+  captionPositionY: number | null;
 }
 
 /** Load saved settings from localStorage */
@@ -87,6 +89,8 @@ const VincePage: React.FC = () => {
       videoTitle,
       hookTitleText,
       hookTitlePosition,
+      captionPositionX,
+      captionPositionY,
       uploadState,
       processingState,
       currentVideoId,
@@ -96,6 +100,8 @@ const VincePage: React.FC = () => {
     setVideoTitle,
     setHookTitleText,
     setHookTitlePosition,
+    setCaptionPositionX,
+    setCaptionPositionY,
     setUploadState,
     setProcessingState,
     setCurrentVideoId,
@@ -140,6 +146,12 @@ const VincePage: React.FC = () => {
     if (savedSettings.hookTitlePosition !== undefined && hookTitlePosition === 10) {
       setHookTitlePosition(savedSettings.hookTitlePosition);
     }
+    if (savedSettings.captionPositionX !== undefined && savedSettings.captionPositionX !== null && captionPositionX === null) {
+      setCaptionPositionX(savedSettings.captionPositionX);
+    }
+    if (savedSettings.captionPositionY !== undefined && savedSettings.captionPositionY !== null && captionPositionY === null) {
+      setCaptionPositionY(savedSettings.captionPositionY);
+    }
   }, []); // Only run once on mount
 
   // Upload/Processing state now comes from context (persists across navigation)
@@ -162,6 +174,8 @@ const VincePage: React.FC = () => {
       hookTitleEnabled,
       hookTitleText,
       hookTitlePosition,
+      captionPositionX,
+      captionPositionY,
     };
     try {
       localStorage.setItem(VINCE_SETTINGS_KEY, JSON.stringify(settings));
@@ -179,6 +193,8 @@ const VincePage: React.FC = () => {
     hookTitleEnabled,
     hookTitleText,
     hookTitlePosition,
+    captionPositionX,
+    captionPositionY,
   ]);
 
   // Warn user before leaving page if they have an unuploaded video
@@ -561,6 +577,8 @@ const VincePage: React.FC = () => {
         hook_title_enabled: hookTitleEnabled,
         hook_title_text: hookTitleText.trim() || null,
         hook_title_position: hookTitleEnabled ? hookTitlePosition : null,
+        caption_position_x: captionPositionX,
+        caption_position_y: captionPositionY,
         error_message: null,
         retry_count: 0,
         processing_started_at: null,
@@ -587,6 +605,9 @@ const VincePage: React.FC = () => {
             ? { text: hookTitleText.trim(), top: hookTitlePosition }
             : { top: hookTitlePosition })
           : undefined,
+        // Only sent if the user actually touched the slider (null = untouched)
+        captionPositionX: captionPositionX ?? undefined,
+        captionPositionY: captionPositionY ?? undefined,
       });
 
       setCurrentProjectId(projectId);
@@ -819,6 +840,10 @@ const VincePage: React.FC = () => {
                   onHookTitleEnabledChange={setHookTitleEnabled}
                   onHookTitleTextChange={setHookTitleText}
                   onHookTitlePositionChange={setHookTitlePosition}
+                  captionPositionX={captionPositionX}
+                  captionPositionY={captionPositionY}
+                  onCaptionPositionXChange={setCaptionPositionX}
+                  onCaptionPositionYChange={setCaptionPositionY}
                 />
               </div>
 

@@ -43,6 +43,10 @@ export interface SubmagicCreateProjectRequest {
     top?: number;
     size?: number;
   };
+  /** Body caption horizontal position, top-level field. Range 0-100 confirmed via live Submagic API validation error testing (Aug 1, 2026). */
+  captionPositionX?: number;
+  /** Body caption vertical position, top-level field. Range 0-80 confirmed via live Submagic API validation error testing (Aug 1, 2026) -- NOT the same range as captionPositionX. */
+  captionPositionY?: number;
 }
 
 /** Response from POST /v1/projects */
@@ -105,6 +109,10 @@ export interface Video {
   hook_title_text: string | null;
   /** Hook title vertical position (0-100, null = default) */
   hook_title_position: number | null;
+  /** Body caption horizontal position (range 0-100, confirmed via live Submagic API testing Aug 1, 2026; null = not set by user, Submagic applies its own default) */
+  caption_position_x: number | null;
+  /** Body caption vertical position (range 0-80, confirmed via live Submagic API testing Aug 1, 2026 -- NOT the same range as caption_position_x; null = not set by user) */
+  caption_position_y: number | null;
   error_message: string | null;
   retry_count: number;
   created_at: string;
@@ -152,6 +160,15 @@ export const ACCEPTED_VIDEO_TYPES = {
 
 /** Maximum file size (2GB in bytes) */
 export const MAX_FILE_SIZE = 2147483648;
+
+/**
+ * Slider display midpoints for captionPositionX/Y (UI default only — never
+ * sent to Submagic unless the user actually moves the slider). Ranges
+ * confirmed via live Submagic API testing (Aug 1, 2026): X is 0-100, Y is
+ * 0-80 (NOT the same range), so each gets its own center point.
+ */
+export const CAPTION_POSITION_X_DEFAULT = 50;
+export const CAPTION_POSITION_Y_DEFAULT = 40;
 
 /** Maximum title length for Submagic API (prevents "title is too long" error) */
 export const MAX_TITLE_LENGTH = 100;

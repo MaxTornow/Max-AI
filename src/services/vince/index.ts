@@ -438,6 +438,10 @@ export const processVideo = async (
     removeSilencePace?: 'natural' | 'fast' | 'extra-fast';
     removeBadTakes?: boolean;
     hookTitle?: boolean | { text?: string; top?: number };
+    // Body caption position. Ranges confirmed via live Submagic API testing (Aug 1, 2026):
+    // captionPositionX is 0-100, captionPositionY is 0-80 (not the same range).
+    captionPositionX?: number;
+    captionPositionY?: number;
   }
 ): Promise<string> => {
   console.log('Starting video processing:', videoId);
@@ -473,6 +477,12 @@ export const processVideo = async (
   }
   if (options.hookTitle) {
     request.hookTitle = options.hookTitle;
+  }
+  if (options.captionPositionX !== undefined) {
+    request.captionPositionX = options.captionPositionX;
+  }
+  if (options.captionPositionY !== undefined) {
+    request.captionPositionY = options.captionPositionY;
   }
 
   // Create Submagic project
