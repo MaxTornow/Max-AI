@@ -1,6 +1,6 @@
 import React from 'react';
 import { FiZoomIn, FiImage, FiGlobe, FiClock, FiFilter, FiType, FiMove } from 'react-icons/fi';
-import { SUPPORTED_LANGUAGES, SILENCE_PACE_OPTIONS, SilencePace, CAPTION_POSITION_DEFAULT } from '@services/vince/types';
+import { SUPPORTED_LANGUAGES, SILENCE_PACE_OPTIONS, SilencePace, CAPTION_POSITION_X_DEFAULT, CAPTION_POSITION_Y_DEFAULT } from '@services/vince/types';
 
 interface FeatureTogglesProps {
   magicZooms: boolean;
@@ -294,7 +294,7 @@ const FeatureToggles: React.FC<FeatureTogglesProps> = ({
         )}
       </div>
 
-      {/* Body Caption Position — shape/range UNCONFIRMED with Submagic, see types.ts */}
+      {/* Body Caption Position — ranges confirmed via live Submagic API testing (Aug 1, 2026): X is 0-100, Y is 0-80 */}
       <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg space-y-3">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg bg-teal-100 dark:bg-teal-900/40 flex items-center justify-center">
@@ -325,7 +325,7 @@ const FeatureToggles: React.FC<FeatureTogglesProps> = ({
             min="0"
             max="100"
             step="1"
-            value={captionPositionX ?? CAPTION_POSITION_DEFAULT}
+            value={captionPositionX ?? CAPTION_POSITION_X_DEFAULT}
             onChange={(e) => onCaptionPositionXChange(parseInt(e.target.value))}
             disabled={disabled}
             className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-primary-600"
@@ -345,9 +345,9 @@ const FeatureToggles: React.FC<FeatureTogglesProps> = ({
             type="range"
             aria-label="Caption vertical position"
             min="0"
-            max="100"
+            max="80"
             step="1"
-            value={captionPositionY ?? CAPTION_POSITION_DEFAULT}
+            value={captionPositionY ?? CAPTION_POSITION_Y_DEFAULT}
             onChange={(e) => onCaptionPositionYChange(parseInt(e.target.value))}
             disabled={disabled}
             className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-primary-600"

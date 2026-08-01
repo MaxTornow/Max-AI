@@ -438,7 +438,8 @@ export const processVideo = async (
     removeSilencePace?: 'natural' | 'fast' | 'extra-fast';
     removeBadTakes?: boolean;
     hookTitle?: boolean | { text?: string; top?: number };
-    // Body caption position (UNCONFIRMED shape/range, see SubmagicCreateProjectRequest)
+    // Body caption position. Ranges confirmed via live Submagic API testing (Aug 1, 2026):
+    // captionPositionX is 0-100, captionPositionY is 0-80 (not the same range).
     captionPositionX?: number;
     captionPositionY?: number;
   }

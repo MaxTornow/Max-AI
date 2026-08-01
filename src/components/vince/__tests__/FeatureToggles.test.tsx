@@ -192,8 +192,15 @@ describe('FeatureToggles Component', () => {
 
     const xSlider = screen.getByRole('slider', { name: 'Caption horizontal position' });
     const ySlider = screen.getByRole('slider', { name: 'Caption vertical position' });
+
+    // X range is 0-100, Y range is 0-80 (confirmed via live Submagic API testing, not symmetric)
+    expect(xSlider).toHaveAttribute('min', '0');
+    expect(xSlider).toHaveAttribute('max', '100');
+    expect(ySlider).toHaveAttribute('min', '0');
+    expect(ySlider).toHaveAttribute('max', '80');
+
     expect(xSlider).toHaveValue('50');
-    expect(ySlider).toHaveValue('50');
+    expect(ySlider).toHaveValue('40');
 
     fireEvent.change(xSlider, { target: { value: '30' } });
     expect(defaultProps.onCaptionPositionXChange).toHaveBeenCalledWith(30);

@@ -43,19 +43,9 @@ export interface SubmagicCreateProjectRequest {
     top?: number;
     size?: number;
   };
-  /**
-   * Body caption horizontal position. UNCONFIRMED, undocumented Submagic field
-   * (confirmed to exist by Submagic's dev team as of Aug 2026, not yet in
-   * public docs). Implemented here as a top-level field on the request body,
-   * matching neither hookTitle's nested shape nor any verified Submagic
-   * example — this placement has NOT been confirmed against a real API
-   * response. Range assumed 0-100 by analogy to hookTitle.top's original
-   * "likely 0-100" hint, which turned out to actually be 0-80 in practice
-   * (see hook_title_position). Treat both the shape and range as unverified
-   * until confirmed with Submagic.
-   */
+  /** Body caption horizontal position, top-level field. Range 0-100 confirmed via live Submagic API validation error testing (Aug 1, 2026). */
   captionPositionX?: number;
-  /** Body caption vertical position. See captionPositionX for the same shape/range caveats. */
+  /** Body caption vertical position, top-level field. Range 0-80 confirmed via live Submagic API validation error testing (Aug 1, 2026) -- NOT the same range as captionPositionX. */
   captionPositionY?: number;
 }
 
@@ -119,9 +109,9 @@ export interface Video {
   hook_title_text: string | null;
   /** Hook title vertical position (0-100, null = default) */
   hook_title_position: number | null;
-  /** Body caption horizontal position (range UNCONFIRMED, assumed 0-100; null = not set by user, Submagic applies its own default) */
+  /** Body caption horizontal position (range 0-100, confirmed via live Submagic API testing Aug 1, 2026; null = not set by user, Submagic applies its own default) */
   caption_position_x: number | null;
-  /** Body caption vertical position (range UNCONFIRMED, assumed 0-100; see caption_position_x) */
+  /** Body caption vertical position (range 0-80, confirmed via live Submagic API testing Aug 1, 2026 -- NOT the same range as caption_position_x; null = not set by user) */
   caption_position_y: number | null;
   error_message: string | null;
   retry_count: number;
@@ -172,11 +162,13 @@ export const ACCEPTED_VIDEO_TYPES = {
 export const MAX_FILE_SIZE = 2147483648;
 
 /**
- * Slider display midpoint for captionPositionX/Y (UI default only — never sent
- * to Submagic unless the user actually moves the slider). Assumes a 0-100
- * range, which is UNCONFIRMED; revisit if Submagic confirms a narrower range.
+ * Slider display midpoints for captionPositionX/Y (UI default only — never
+ * sent to Submagic unless the user actually moves the slider). Ranges
+ * confirmed via live Submagic API testing (Aug 1, 2026): X is 0-100, Y is
+ * 0-80 (NOT the same range), so each gets its own center point.
  */
-export const CAPTION_POSITION_DEFAULT = 50;
+export const CAPTION_POSITION_X_DEFAULT = 50;
+export const CAPTION_POSITION_Y_DEFAULT = 40;
 
 /** Maximum title length for Submagic API (prevents "title is too long" error) */
 export const MAX_TITLE_LENGTH = 100;
