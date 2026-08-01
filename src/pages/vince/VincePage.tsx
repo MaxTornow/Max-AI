@@ -844,6 +844,7 @@ const VincePage: React.FC = () => {
                   captionPositionY={captionPositionY}
                   onCaptionPositionXChange={setCaptionPositionX}
                   onCaptionPositionYChange={setCaptionPositionY}
+                  videoFile={selectedFile}
                 />
               </div>
 

@@ -209,6 +209,45 @@ describe('FeatureToggles Component', () => {
     expect(defaultProps.onCaptionPositionYChange).toHaveBeenCalledWith(70);
   });
 
+  describe('caption position preview overlay', () => {
+    test('hides the overlay box when neither axis has been touched', () => {
+      render(<FeatureToggles {...defaultProps} captionPositionX={null} captionPositionY={null} />);
+      expect(screen.queryByTestId('caption-preview-box')).not.toBeInTheDocument();
+    });
+
+    test('hides the overlay box when only one axis has been touched', () => {
+      render(<FeatureToggles {...defaultProps} captionPositionX={30} captionPositionY={null} />);
+      expect(screen.queryByTestId('caption-preview-box')).not.toBeInTheDocument();
+    });
+
+    test('shows the overlay box once both axes have been touched', () => {
+      render(<FeatureToggles {...defaultProps} captionPositionX={30} captionPositionY={20} />);
+      expect(screen.getByTestId('caption-preview-box')).toBeInTheDocument();
+    });
+
+    test('shows a placeholder icon (no crash) when no video file is provided', () => {
+      render(<FeatureToggles {...defaultProps} videoFile={null} />);
+      expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    });
+
+    test('renders a video preview from the provided file', () => {
+      const createObjectURL = jest.fn(() => 'blob:mock-url');
+      const revokeObjectURL = jest.fn();
+      (global.URL as any).createObjectURL = createObjectURL;
+      (global.URL as any).revokeObjectURL = revokeObjectURL;
+
+      const file = new File(['dummy'], 'clip.mp4', { type: 'video/mp4' });
+      const { container, unmount } = render(<FeatureToggles {...defaultProps} videoFile={file} />);
+
+      expect(createObjectURL).toHaveBeenCalledWith(file);
+      const video = container.querySelector('video');
+      expect(video).toHaveAttribute('src', 'blob:mock-url');
+
+      unmount();
+      expect(revokeObjectURL).toHaveBeenCalledWith('blob:mock-url');
+    });
+  });
+
   test('displays correct percentage value on slider', () => {
     const { rerender } = render(
       <FeatureToggles {...defaultProps} magicBrolls={true} magicBrollsPercentage={25} />

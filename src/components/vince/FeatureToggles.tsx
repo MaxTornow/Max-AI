@@ -1,6 +1,20 @@
-import React from 'react';
-import { FiZoomIn, FiImage, FiGlobe, FiClock, FiFilter, FiType, FiMove } from 'react-icons/fi';
+import React, { useEffect, useState } from 'react';
+import { FiZoomIn, FiImage, FiGlobe, FiClock, FiFilter, FiType, FiMove, FiVideo } from 'react-icons/fi';
 import { SUPPORTED_LANGUAGES, SILENCE_PACE_OPTIONS, SilencePace, CAPTION_POSITION_X_DEFAULT, CAPTION_POSITION_Y_DEFAULT } from '@services/vince/types';
+
+// Fixed preview-thumbnail size for the caption position overlay. No aspect-ratio
+// convention exists elsewhere in this codebase (checked: no aspect-[9/16]/aspect-video
+// classes, no template width/height metadata) -- 9:16 is chosen here because Submagic
+// is used for short-form TikTok/Reels-style vertical captioning, but this is our own
+// assumption, not something confirmed against real Submagic output.
+const PREVIEW_WIDTH_PX = 120;
+const PREVIEW_HEIGHT_PX = Math.round((PREVIEW_WIDTH_PX * 16) / 9);
+
+// Rough caption-band placeholder size within the preview, in px.
+const CAPTION_BOX_WIDTH_PX = 76;
+const CAPTION_BOX_HEIGHT_PX = 24;
+
+const clamp = (min: number, value: number, max: number) => Math.min(max, Math.max(min, value));
 
 interface FeatureTogglesProps {
   magicZooms: boolean;
@@ -29,6 +43,10 @@ interface FeatureTogglesProps {
   captionPositionY: number | null;
   onCaptionPositionXChange: (value: number) => void;
   onCaptionPositionYChange: (value: number) => void;
+  // Selected video file, used only to render a first-frame preview behind the
+  // caption position overlay. No upload/thumbnail generation happens elsewhere
+  // in VINCE today, so this is generated client-side from the raw File.
+  videoFile?: File | null;
 }
 
 /**
@@ -59,7 +77,48 @@ const FeatureToggles: React.FC<FeatureTogglesProps> = ({
   captionPositionY,
   onCaptionPositionXChange,
   onCaptionPositionYChange,
+  videoFile = null,
 }) => {
+  const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!videoFile) {
+      setVideoPreviewUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(videoFile);
+    setVideoPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [videoFile]);
+
+  // Only show the overlay once the user has explicitly set BOTH axes -- we never
+  // fabricate a coordinate for an axis the user hasn't touched (see caption
+  // position section below for the full reasoning).
+  const showCaptionOverlay = captionPositionX !== null && captionPositionY !== null;
+
+  let captionBoxLeftPx = 0;
+  let captionBoxTopPx = 0;
+  if (showCaptionOverlay) {
+    // X: confirmed 0-100 range maps directly to 0%-100% of preview width.
+    const centerXPx = (captionPositionX! / 100) * PREVIEW_WIDTH_PX;
+    captionBoxLeftPx = clamp(0, centerXPx - CAPTION_BOX_WIDTH_PX / 2, PREVIEW_WIDTH_PX - CAPTION_BOX_WIDTH_PX);
+
+    // Y: ASSUMPTION (UNCONFIRMED) -- we only know captionPositionY's valid range
+    // is 0-80 from a Submagic validation error, not how that number maps to a
+    // visual position. Two readings are equally plausible from the numbers alone:
+    //   (a) literal: Y is a direct percent-from-top of the frame, capped at 80
+    //       because Submagic reserves the bottom ~20% of the frame (e.g. for
+    //       TikTok/Reels-style UI chrome -- captions, buttons, username, etc.)
+    //   (b) normalized: 0-80 is rescaled to fill 0%-100% of the frame, so 80
+    //       visually means the bottom edge, not "80% down".
+    // We go with (a) here: the field is named like hookTitle's `top`, which reads
+    // as a literal offset, and a reserved-bottom-safe-zone is a very common
+    // real-world reason for a platform to cap a position field below 100. If this
+    // turns out wrong, only this block needs to change (divide by 80 instead of 100).
+    const centerYPx = (captionPositionY! / 100) * PREVIEW_HEIGHT_PX;
+    captionBoxTopPx = clamp(0, centerYPx - CAPTION_BOX_HEIGHT_PX / 2, PREVIEW_HEIGHT_PX - CAPTION_BOX_HEIGHT_PX);
+  }
+
   return (
     <div className="w-full space-y-4">
       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -310,48 +369,94 @@ const FeatureToggles: React.FC<FeatureTogglesProps> = ({
           </div>
         </div>
 
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <label className="text-xs font-medium text-gray-600 dark:text-gray-400">
-              Horizontal
-            </label>
-            <span className="text-sm font-medium text-primary-600 dark:text-primary-400">
-              {captionPositionX ?? 'Default'}
-            </span>
-          </div>
-          <input
-            type="range"
-            aria-label="Caption horizontal position"
-            min="0"
-            max="100"
-            step="1"
-            value={captionPositionX ?? CAPTION_POSITION_X_DEFAULT}
-            onChange={(e) => onCaptionPositionXChange(parseInt(e.target.value))}
-            disabled={disabled}
-            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-primary-600"
-          />
-        </div>
+        <div className="flex gap-4">
+          {/* Live preview: rough, client-side-only, no real caption text/font/styling */}
+          <div className="flex-shrink-0">
+            <div
+              className="relative bg-gray-900 rounded-md overflow-hidden border border-gray-700"
+              style={{ width: PREVIEW_WIDTH_PX, height: PREVIEW_HEIGHT_PX }}
+            >
+              {videoPreviewUrl ? (
+                <video
+                  src={videoPreviewUrl}
+                  muted
+                  playsInline
+                  preload="metadata"
+                  className="absolute inset-0 w-full h-full object-cover"
+                />
+              ) : (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <FiVideo className="w-6 h-6 text-gray-600" aria-hidden="true" />
+                </div>
+              )}
 
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <label className="text-xs font-medium text-gray-600 dark:text-gray-400">
-              Vertical
-            </label>
-            <span className="text-sm font-medium text-primary-600 dark:text-primary-400">
-              {captionPositionY ?? 'Default'}
-            </span>
+              {showCaptionOverlay && (
+                <div
+                  data-testid="caption-preview-box"
+                  className="absolute bg-black/70 rounded flex flex-col items-center justify-center gap-1 px-1"
+                  style={{
+                    width: CAPTION_BOX_WIDTH_PX,
+                    height: CAPTION_BOX_HEIGHT_PX,
+                    left: captionBoxLeftPx,
+                    top: captionBoxTopPx,
+                  }}
+                >
+                  <div className="h-1 w-3/4 bg-gray-300/80 rounded-full" />
+                  <div className="h-1 w-1/2 bg-gray-300/80 rounded-full" />
+                </div>
+              )}
+            </div>
+            <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1 text-center w-[120px]">
+              {showCaptionOverlay ? 'Rough preview' : 'Adjust sliders to preview'}
+            </p>
           </div>
-          <input
-            type="range"
-            aria-label="Caption vertical position"
-            min="0"
-            max="80"
-            step="1"
-            value={captionPositionY ?? CAPTION_POSITION_Y_DEFAULT}
-            onChange={(e) => onCaptionPositionYChange(parseInt(e.target.value))}
-            disabled={disabled}
-            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-primary-600"
-          />
+
+          {/* Sliders */}
+          <div className="flex-1 space-y-3">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-medium text-gray-600 dark:text-gray-400">
+                  Horizontal
+                </label>
+                <span className="text-sm font-medium text-primary-600 dark:text-primary-400">
+                  {captionPositionX ?? 'Default'}
+                </span>
+              </div>
+              <input
+                type="range"
+                aria-label="Caption horizontal position"
+                min="0"
+                max="100"
+                step="1"
+                value={captionPositionX ?? CAPTION_POSITION_X_DEFAULT}
+                onChange={(e) => onCaptionPositionXChange(parseInt(e.target.value))}
+                disabled={disabled}
+                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-primary-600"
+              />
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-medium text-gray-600 dark:text-gray-400">
+                  Vertical
+                </label>
+                <span className="text-sm font-medium text-primary-600 dark:text-primary-400">
+                  {captionPositionY ?? 'Default'}
+                </span>
+              </div>
+              <input
+                type="range"
+                aria-label="Caption vertical position"
+                min="0"
+                max="80"
+                step="1"
+                value={captionPositionY ?? CAPTION_POSITION_Y_DEFAULT}
+                onChange={(e) => onCaptionPositionYChange(parseInt(e.target.value))}
+                disabled={disabled}
+                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-primary-600"
+              />
+            </div>
+          </div>
         </div>
       </div>
 
