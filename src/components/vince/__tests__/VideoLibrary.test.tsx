@@ -42,6 +42,8 @@ describe('VideoLibrary Component', () => {
     hook_title_enabled: false,
     hook_title_text: null,
     hook_title_position: null,
+    caption_position_x: null,
+    caption_position_y: null,
     error_message: null,
     retry_count: 0,
     created_at: '2024-01-01T00:00:00Z',

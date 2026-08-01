@@ -29,6 +29,10 @@ describe('FeatureToggles Component', () => {
     onHookTitleEnabledChange: jest.fn(),
     onHookTitleTextChange: jest.fn(),
     onHookTitlePositionChange: jest.fn(),
+    captionPositionX: null,
+    captionPositionY: null,
+    onCaptionPositionXChange: jest.fn(),
+    onCaptionPositionYChange: jest.fn(),
   };
 
   beforeEach(() => {
@@ -103,20 +107,20 @@ describe('FeatureToggles Component', () => {
 
     expect(screen.getByText('B-roll Percentage')).toBeInTheDocument();
     expect(screen.getByText('40%')).toBeInTheDocument();
-    expect(screen.getByRole('slider')).toBeInTheDocument();
+    expect(screen.getByRole('slider', { name: 'B-roll percentage' })).toBeInTheDocument();
   });
 
   test('hides B-roll percentage slider when B-rolls disabled', () => {
     render(<FeatureToggles {...defaultProps} magicBrolls={false} />);
 
     expect(screen.queryByText('B-roll Percentage')).not.toBeInTheDocument();
-    expect(screen.queryByRole('slider')).not.toBeInTheDocument();
+    expect(screen.queryByRole('slider', { name: 'B-roll percentage' })).not.toBeInTheDocument();
   });
 
   test('calls onMagicBrollsPercentageChange when slider changes', () => {
     render(<FeatureToggles {...defaultProps} magicBrolls={true} />);
 
-    const slider = screen.getByRole('slider');
+    const slider = screen.getByRole('slider', { name: 'B-roll percentage' });
     fireEvent.change(slider, { target: { value: '60' } });
 
     expect(defaultProps.onMagicBrollsPercentageChange).toHaveBeenCalledWith(60);
@@ -172,8 +176,30 @@ describe('FeatureToggles Component', () => {
   test('disables slider when disabled prop is true', () => {
     render(<FeatureToggles {...defaultProps} magicBrolls={true} disabled={true} />);
 
-    const slider = screen.getByRole('slider');
+    const slider = screen.getByRole('slider', { name: 'B-roll percentage' });
     expect(slider).toBeDisabled();
+  });
+
+  test('disables caption position sliders when disabled prop is true', () => {
+    render(<FeatureToggles {...defaultProps} disabled={true} />);
+
+    expect(screen.getByRole('slider', { name: 'Caption horizontal position' })).toBeDisabled();
+    expect(screen.getByRole('slider', { name: 'Caption vertical position' })).toBeDisabled();
+  });
+
+  test('renders caption position sliders defaulting to center, and reports touched value on change', () => {
+    render(<FeatureToggles {...defaultProps} />);
+
+    const xSlider = screen.getByRole('slider', { name: 'Caption horizontal position' });
+    const ySlider = screen.getByRole('slider', { name: 'Caption vertical position' });
+    expect(xSlider).toHaveValue('50');
+    expect(ySlider).toHaveValue('50');
+
+    fireEvent.change(xSlider, { target: { value: '30' } });
+    expect(defaultProps.onCaptionPositionXChange).toHaveBeenCalledWith(30);
+
+    fireEvent.change(ySlider, { target: { value: '70' } });
+    expect(defaultProps.onCaptionPositionYChange).toHaveBeenCalledWith(70);
   });
 
   test('displays correct percentage value on slider', () => {

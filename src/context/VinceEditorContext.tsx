@@ -20,6 +20,9 @@ interface VinceEditorState {
   videoTitle: string;
   hookTitleText: string;
   hookTitlePosition: number;
+  // Body caption position (null = user hasn't touched the slider, nothing sent to Submagic)
+  captionPositionX: number | null;
+  captionPositionY: number | null;
   // Upload/Processing state - persists across navigation
   uploadState: UploadState;
   processingState: ProcessingState;
@@ -33,6 +36,8 @@ interface VinceEditorContextValue {
   setVideoTitle: (title: string) => void;
   setHookTitleText: (text: string) => void;
   setHookTitlePosition: (position: number) => void;
+  setCaptionPositionX: (position: number) => void;
+  setCaptionPositionY: (position: number) => void;
   setUploadState: (state: UploadState) => void;
   setProcessingState: (stateOrUpdater: ProcessingState | ((prev: ProcessingState) => ProcessingState)) => void;
   setCurrentVideoId: (id: string | null) => void;
@@ -45,6 +50,8 @@ const defaultState: VinceEditorState = {
   videoTitle: '',
   hookTitleText: '',
   hookTitlePosition: 10,
+  captionPositionX: null,
+  captionPositionY: null,
   uploadState: { status: 'idle' },
   processingState: { status: 'idle' },
   currentVideoId: null,
@@ -86,6 +93,14 @@ export const VinceEditorProvider: React.FC<{ children: ReactNode }> = ({ childre
     setEditorState((prev) => ({ ...prev, hookTitlePosition }));
   }, []);
 
+  const setCaptionPositionX = useCallback((captionPositionX: number) => {
+    setEditorState((prev) => ({ ...prev, captionPositionX }));
+  }, []);
+
+  const setCaptionPositionY = useCallback((captionPositionY: number) => {
+    setEditorState((prev) => ({ ...prev, captionPositionY }));
+  }, []);
+
   const setUploadState = useCallback((uploadState: UploadState) => {
     setEditorState((prev) => ({ ...prev, uploadState }));
   }, []);
@@ -120,6 +135,8 @@ export const VinceEditorProvider: React.FC<{ children: ReactNode }> = ({ childre
         setVideoTitle,
         setHookTitleText,
         setHookTitlePosition,
+        setCaptionPositionX,
+        setCaptionPositionY,
         setUploadState,
         setProcessingState,
         setCurrentVideoId,

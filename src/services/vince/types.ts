@@ -43,6 +43,20 @@ export interface SubmagicCreateProjectRequest {
     top?: number;
     size?: number;
   };
+  /**
+   * Body caption horizontal position. UNCONFIRMED, undocumented Submagic field
+   * (confirmed to exist by Submagic's dev team as of Aug 2026, not yet in
+   * public docs). Implemented here as a top-level field on the request body,
+   * matching neither hookTitle's nested shape nor any verified Submagic
+   * example — this placement has NOT been confirmed against a real API
+   * response. Range assumed 0-100 by analogy to hookTitle.top's original
+   * "likely 0-100" hint, which turned out to actually be 0-80 in practice
+   * (see hook_title_position). Treat both the shape and range as unverified
+   * until confirmed with Submagic.
+   */
+  captionPositionX?: number;
+  /** Body caption vertical position. See captionPositionX for the same shape/range caveats. */
+  captionPositionY?: number;
 }
 
 /** Response from POST /v1/projects */
@@ -105,6 +119,10 @@ export interface Video {
   hook_title_text: string | null;
   /** Hook title vertical position (0-100, null = default) */
   hook_title_position: number | null;
+  /** Body caption horizontal position (range UNCONFIRMED, assumed 0-100; null = not set by user, Submagic applies its own default) */
+  caption_position_x: number | null;
+  /** Body caption vertical position (range UNCONFIRMED, assumed 0-100; see caption_position_x) */
+  caption_position_y: number | null;
   error_message: string | null;
   retry_count: number;
   created_at: string;
@@ -152,6 +170,13 @@ export const ACCEPTED_VIDEO_TYPES = {
 
 /** Maximum file size (2GB in bytes) */
 export const MAX_FILE_SIZE = 2147483648;
+
+/**
+ * Slider display midpoint for captionPositionX/Y (UI default only — never sent
+ * to Submagic unless the user actually moves the slider). Assumes a 0-100
+ * range, which is UNCONFIRMED; revisit if Submagic confirms a narrower range.
+ */
+export const CAPTION_POSITION_DEFAULT = 50;
 
 /** Maximum title length for Submagic API (prevents "title is too long" error) */
 export const MAX_TITLE_LENGTH = 100;
