@@ -77,7 +77,7 @@ const formatTimeRemaining = (seconds: number): string => {
 
 // Temporary kill switch while the Instagram video fetch issue is being fixed.
 // Flip back to false to restore normal access.
-const MAINTENANCE_MODE = true;
+const MAINTENANCE_MODE = false;
 
 /**
  * Create Rewrite component for VERA
