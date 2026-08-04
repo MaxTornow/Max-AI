@@ -9,13 +9,22 @@ import { API_KEYS } from './config';
 /**
  * Response type for new FastSaver API
  */
+interface FastSaverItem {
+  type: string;
+  download_url: string;
+  thumbnail_url: string | null;
+}
+
 interface FastSaverResponse {
   ok: boolean;
   id: string;
   source: string;
   type: string;
-  download_url: string;
-  thumbnail_url: string;
+  download_url?: string;
+  thumbnail_url?: string;
+  // "album"-type responses (Instagram carousel posts, even single-video ones) nest the
+  // actual media here instead of at the top level.
+  items?: FastSaverItem[];
   width?: number;
   height?: number;
   duration?: number;
@@ -27,22 +36,37 @@ interface FastSaverResponse {
 }
 
 /**
+ * Resolves the download/thumbnail URLs regardless of response shape - plain reels put
+ * them at the top level, album-type responses nest them in the first video item.
+ */
+const resolveVideoUrls = (response: FastSaverResponse): { downloadUrl?: string; thumbnailUrl?: string } => {
+  if (response.download_url) {
+    return { downloadUrl: response.download_url, thumbnailUrl: response.thumbnail_url };
+  }
+  const videoItem = response.items?.find(item => item.type === 'video');
+  return { downloadUrl: videoItem?.download_url, thumbnailUrl: videoItem?.thumbnail_url || undefined };
+};
+
+/**
  * Maps new FastSaver API response to existing InstagramVideoInfo type
  * Preserves backward compatibility with existing code
  */
-const mapFastSaverResponse = (response: FastSaverResponse): InstagramVideoInfo => ({
-  error: !response.ok,
-  hosting: response.source?.replace('.com', '') || 'unknown',
-  shortcode: response.id,
-  download_url: response.download_url,
-  thumbnail: response.thumbnail_url,
-  caption: response.caption || '',
-  // Include new fields (InstagramVideoInfo allows any via [key: string]: any)
-  type: response.type,
-  width: response.width,
-  height: response.height,
-  duration: response.duration,
-});
+const mapFastSaverResponse = (response: FastSaverResponse): InstagramVideoInfo => {
+  const { downloadUrl, thumbnailUrl } = resolveVideoUrls(response);
+  return {
+    error: !response.ok,
+    hosting: response.source?.replace('.com', '') || 'unknown',
+    shortcode: response.id,
+    download_url: downloadUrl,
+    thumbnail: thumbnailUrl,
+    caption: response.caption || '',
+    // Include new fields (InstagramVideoInfo allows any via [key: string]: any)
+    type: response.type,
+    width: response.width,
+    height: response.height,
+    duration: response.duration,
+  };
+};
 
 /**
  * Normalize Instagram URLs - convert /p/ to /reel/ format
@@ -104,9 +128,10 @@ export const getInstagramVideoInfo = async (url: string): Promise<InstagramVideo
     console.log('[DEBUG] getInstagramVideoInfo - Validating response data...');
     console.log('[DEBUG] getInstagramVideoInfo - Has data:', !!data);
     console.log('[DEBUG] getInstagramVideoInfo - ok field:', data?.ok);
-    console.log('[DEBUG] getInstagramVideoInfo - Has download_url:', data && !!data.download_url);
+    const { downloadUrl } = data ? resolveVideoUrls(data) : { downloadUrl: undefined };
+    console.log('[DEBUG] getInstagramVideoInfo - Has download_url (top-level or items[]):', !!downloadUrl);
 
-    if (!data || !data.ok || !data.download_url) {
+    if (!data || !data.ok || !downloadUrl) {
       throw new Error(
         `Invalid response from FastSaver API: ${apiReason || 'missing download URL or request failed'}`
       );
