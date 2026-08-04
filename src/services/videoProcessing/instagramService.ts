@@ -170,24 +170,49 @@ export const getInstagramVideoInfo = async (url: string): Promise<InstagramVideo
  */
 export const downloadInstagramVideo = async (downloadUrl: string): Promise<ArrayBuffer> => {
   console.log('[DEBUG] downloadInstagramVideo - Starting with URL:', downloadUrl.substring(0, 50) + '...');
-  try {
-    const startTime = Date.now();
 
-    // Direct fetch to Instagram CDN
-    const response = await fetch(downloadUrl, {
-      method: 'GET',
-    });
-
-    console.log('[DEBUG] downloadInstagramVideo - Response status:', response.status, response.statusText);
-
-    if (!response.ok) {
-      throw new Error(`Failed to download Instagram video: ${response.status} ${response.statusText}`);
-    }
-
+  const readVideoData = async (response: Response): Promise<ArrayBuffer> => {
     const videoData = await response.arrayBuffer();
-
     if (!videoData || videoData.byteLength === 0) {
       throw new Error('Received empty video data from Instagram');
+    }
+    return videoData;
+  };
+
+  try {
+    const startTime = Date.now();
+    let videoData: ArrayBuffer;
+
+    // Direct fetch to Instagram CDN - works for most URLs and has no size limit.
+    try {
+      const response = await fetch(downloadUrl, { method: 'GET' });
+      console.log('[DEBUG] downloadInstagramVideo - Direct fetch response status:', response.status, response.statusText);
+
+      if (!response.ok) {
+        throw new Error(`Failed to download Instagram video: ${response.status} ${response.statusText}`);
+      }
+      videoData = await readVideoData(response);
+    } catch (directError) {
+      // A fetch that fails with no HTTP response at all (TypeError, e.g. "Failed to
+      // fetch") means the browser blocked the request outright - most commonly CORS,
+      // since Instagram's CDN doesn't consistently send CORS headers for every edge
+      // node. Fall back to our own proxy, which sets the right headers server-side.
+      if (!(directError instanceof TypeError)) {
+        throw directError;
+      }
+      console.warn('[DEBUG] downloadInstagramVideo - Direct fetch blocked (likely CORS), falling back to proxy:', directError.message);
+
+      const proxyUrl = `/api/video-proxy?url=${encodeURIComponent(downloadUrl)}`;
+      const proxyResponse = await fetch(proxyUrl, { method: 'GET' });
+      console.log('[DEBUG] downloadInstagramVideo - Proxy response status:', proxyResponse.status, proxyResponse.statusText);
+
+      if (proxyResponse.status === 413) {
+        throw new Error('Video is too large to download (over ~4.5MB). Please try a shorter clip.');
+      }
+      if (!proxyResponse.ok) {
+        throw new Error(`Failed to download Instagram video via proxy: ${proxyResponse.status} ${proxyResponse.statusText}`);
+      }
+      videoData = await readVideoData(proxyResponse);
     }
 
     const downloadTime = Date.now() - startTime;
