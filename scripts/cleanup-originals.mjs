@@ -1,26 +1,53 @@
 #!/usr/bin/env node
 
 /**
- * One-Time Original Video Cleanup
+ * Original Video Retention-Window Cleanup (manual CLI)
  *
- * Deletes original video files from Supabase Storage for videos that have
- * already been processed and have a confirmed processed file in storage.
+ * Deletes original video files from Supabase Storage for videos whose
+ * processing completed more than RETENTION_DAYS ago. This is a retention
+ * window, not immediate post-caption deletion: originals are kept around
+ * after Submagic finishes so features like re-processing/trimming can still
+ * use them, and are only reclaimed once they're older than the window.
+ *
+ * Storage context: Supabase Storage previously hit 103GB/100GB (Pro plan)
+ * because originals were kept forever. This job exists to keep that in
+ * check without deleting originals the moment captioning finishes.
+ *
+ * This is the manual entry point. The same logic also runs on a schedule via
+ * netlify/functions/cleanup-originals-run.js (triggered by n8n) — both call
+ * scripts/lib/cleanupOriginals.mjs so they can't drift out of sync.
+ *
+ * Age is measured from the video's *completion* date, not its upload date:
+ *   - Phase local & url (completed videos): `processing_completed_at`
+ *   - Phase failed (--failed, opt-in):      `updated_at` (when it was marked
+ *     failed; failed videos have no completion date)
  *
  * Safety gates:
- *   - Only targets videos with submagic_status = 'completed'
+ *   - Only targets videos with submagic_status = 'completed' (or 'failed' with --failed)
+ *   - Only targets videos older than the retention window (default 30 days)
  *   - For local processed files: verifies file exists via createSignedUrl before deleting
- *   - For URL fallback files: also deletes originals (processed URLs are expired/dead)
+ *   - For URL fallback files: also gated by the retention window (see note below)
  *   - Default mode is dry-run; must pass --execute to delete
  *
  * Modes:
- *   --local-only    Only clean originals that have a local processed file (safest)
- *   --include-urls  Also clean originals where processed is a URL fallback (frees most space)
+ *   --local-only          Only clean originals that have a local processed file (safest, default)
+ *   --include-urls        Also clean originals where processed is a URL fallback
+ *   --failed               Also clean originals for failed videos (no processed result ever existed)
+ *   --retention-days=N    Override the retention window in days (default 30)
+ *   --max-per-run=N       Cap total videos processed this run (default unlimited for manual CLI use)
+ *
+ * Note on --include-urls: a URL-fallback "processed" video is just a Submagic
+ * CDN link that expires within hours, so once its original is deleted there is
+ * no durable copy of that video left at all. It's still gated by the same
+ * retention window as local files (rather than deleted on sight) so users get
+ * the same grace period to re-download/re-process before it's gone for good.
  *
  * Usage:
- *   node scripts/cleanup-originals.mjs --dry-run                    # Preview local-only cleanup
- *   node scripts/cleanup-originals.mjs --dry-run --include-urls     # Preview full cleanup
- *   node scripts/cleanup-originals.mjs --execute                    # Execute local-only cleanup
- *   node scripts/cleanup-originals.mjs --execute --include-urls     # Execute full cleanup
+ *   node scripts/cleanup-originals.mjs --dry-run                                   # Preview local-only cleanup, 30-day window
+ *   node scripts/cleanup-originals.mjs --dry-run --include-urls                    # Preview full cleanup
+ *   node scripts/cleanup-originals.mjs --dry-run --retention-days=14               # Preview with a shorter window
+ *   node scripts/cleanup-originals.mjs --execute                                   # Execute local-only cleanup
+ *   node scripts/cleanup-originals.mjs --execute --include-urls                    # Execute full cleanup
  *
  * Environment (loaded from .env automatically):
  *   SUPABASE_SERVICE_ROLE_KEY - Required to bypass RLS
@@ -30,6 +57,7 @@
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 import { createClient } from '@supabase/supabase-js';
+import { runCleanupOriginals, DEFAULT_RETENTION_DAYS } from './lib/cleanupOriginals.mjs';
 
 // ── Arg parsing ─────────────────────────────────────────────────────
 const args = process.argv.slice(2);
@@ -38,16 +66,35 @@ const DRY_RUN = !EXECUTE;
 const INCLUDE_URLS = args.includes('--include-urls');
 const INCLUDE_FAILED = args.includes('--failed');
 
+const retentionArg = args.find((a) => a.startsWith('--retention-days='));
+const RETENTION_DAYS = retentionArg ? Number(retentionArg.split('=')[1]) : DEFAULT_RETENTION_DAYS;
+
+const maxArg = args.find((a) => a.startsWith('--max-per-run='));
+const MAX_PER_RUN = maxArg ? Number(maxArg.split('=')[1]) : Infinity;
+
+if (!Number.isFinite(RETENTION_DAYS) || RETENTION_DAYS <= 0) {
+  console.error(`Error: --retention-days must be a positive number (got "${retentionArg}").`);
+  process.exit(1);
+}
+if (maxArg && (!Number.isFinite(MAX_PER_RUN) || MAX_PER_RUN <= 0)) {
+  console.error(`Error: --max-per-run must be a positive number (got "${maxArg}").`);
+  process.exit(1);
+}
+
 if (DRY_RUN) {
   console.log('🔍 DRY RUN MODE — no files will be deleted. Pass --execute to delete.');
 } else {
   console.log('⚠️  EXECUTE MODE — original video files will be deleted.');
 }
+console.log(`   Retention window: ${RETENTION_DAYS} day(s)`);
 if (INCLUDE_URLS) {
-  console.log('   Including URL-fallback videos (Submagic CDN URLs are expired/dead).');
+  console.log('   Including URL-fallback videos (still gated by the retention window).');
 }
 if (INCLUDE_FAILED) {
-  console.log('   Including failed videos (never produced a processed result).');
+  console.log('   Including failed videos (gated by retention window since they were marked failed).');
+}
+if (Number.isFinite(MAX_PER_RUN)) {
+  console.log(`   Capped at ${MAX_PER_RUN} video(s) this run.`);
 }
 console.log();
 
@@ -79,197 +126,33 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 // ── Main ────────────────────────────────────────────────────────────
 async function main() {
-  let deletedCount = 0;
-  let skippedCount = 0;
-  let totalBytesReclaimed = 0;
+  const summary = await runCleanupOriginals(supabase, {
+    retentionDays: RETENTION_DAYS,
+    includeUrls: INCLUDE_URLS,
+    includeFailed: INCLUDE_FAILED,
+    dryRun: DRY_RUN,
+    maxPerRun: MAX_PER_RUN,
+    log: console.log,
+    warn: console.warn,
+  });
 
-  // ── Phase 1: Videos with local processed files ──────────────────
-  console.log('Phase 1: Querying completed videos with local processed files...');
-  const { data: localVideos, error: localError } = await supabase
-    .from('videos')
-    .select('id, title, original_storage_path, processed_storage_path, file_size_bytes')
-    .eq('submagic_status', 'completed')
-    .not('processed_storage_path', 'is', null)
-    .not('processed_storage_path', 'like', 'http%');
+  const totalMB = (summary.bytesReclaimed / (1024 * 1024)).toFixed(1);
+  const totalGB = (summary.bytesReclaimed / (1024 * 1024 * 1024)).toFixed(2);
 
-  if (localError) {
-    console.error('Query failed:', localError.message);
-    process.exit(1);
-  }
-
-  console.log(`  Found ${localVideos?.length || 0} video(s) with local processed files.`);
-
-  for (const video of localVideos || []) {
-    const label = `[${video.title || video.id}]`;
-
-    // Verify processed file exists before deleting original
-    const { data: signedData, error: signedError } = await supabase.storage
-      .from('videos')
-      .createSignedUrl(video.processed_storage_path, 60);
-
-    if (signedError || !signedData?.signedUrl) {
-      console.warn(`  ${label} SKIP — processed file not found in storage: ${video.processed_storage_path}`);
-      skippedCount++;
-      continue;
-    }
-
-    const sizeStr = video.file_size_bytes
-      ? `${(video.file_size_bytes / (1024 * 1024)).toFixed(1)} MB`
-      : 'unknown size';
-
-    if (DRY_RUN) {
-      console.log(`  ${label} WOULD DELETE original (${sizeStr}): ${video.original_storage_path}`);
-    } else {
-      const { error: deleteError } = await supabase.storage
-        .from('videos')
-        .remove([video.original_storage_path]);
-
-      if (deleteError) {
-        console.warn(`  ${label} DELETE FAILED: ${deleteError.message}`);
-        skippedCount++;
-        continue;
-      }
-      console.log(`  ${label} DELETED original (${sizeStr}): ${video.original_storage_path}`);
-    }
-
-    deletedCount++;
-    if (video.file_size_bytes) totalBytesReclaimed += video.file_size_bytes;
-  }
-
-  // ── Phase 2: Videos with URL-fallback processed paths ───────────
-  if (INCLUDE_URLS) {
-    console.log('\nPhase 2: Querying completed videos with URL-fallback processed paths...');
-    console.log('  (Submagic CDN URLs expire — these originals are dead weight.)\n');
-
-    // Paginate to get all rows (Supabase defaults to 1000 limit)
-    let urlVideos = [];
-    let page = 0;
-    const PAGE_SIZE = 1000;
-    while (true) {
-      const { data, error: urlErr } = await supabase
-        .from('videos')
-        .select('id, title, original_storage_path, file_size_bytes')
-        .eq('submagic_status', 'completed')
-        .like('processed_storage_path', 'http%')
-        .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
-
-      if (urlErr) {
-        console.error('Query failed:', urlErr.message);
-        process.exit(1);
-      }
-      if (!data || data.length === 0) break;
-      urlVideos = urlVideos.concat(data);
-      if (data.length < PAGE_SIZE) break;
-      page++;
-    }
-
-    console.log(`  Found ${urlVideos.length} video(s) with expired URL fallbacks.`);
-
-    // Process in batches to avoid overwhelming the API
-    const BATCH_SIZE = 20;
-    const videos = urlVideos;
-
-    for (let i = 0; i < videos.length; i += BATCH_SIZE) {
-      const batch = videos.slice(i, i + BATCH_SIZE);
-      const paths = batch.map(v => v.original_storage_path);
-
-      if (DRY_RUN) {
-        for (const video of batch) {
-          const sizeStr = video.file_size_bytes
-            ? `${(video.file_size_bytes / (1024 * 1024)).toFixed(1)} MB`
-            : 'unknown size';
-          console.log(`  [${video.title || video.id}] WOULD DELETE original (${sizeStr})`);
-        }
-      } else {
-        const { error: deleteError } = await supabase.storage
-          .from('videos')
-          .remove(paths);
-
-        if (deleteError) {
-          console.warn(`  Batch ${Math.floor(i / BATCH_SIZE) + 1} DELETE FAILED: ${deleteError.message}`);
-          skippedCount += batch.length;
-          continue;
-        }
-        console.log(`  Batch ${Math.floor(i / BATCH_SIZE) + 1}: deleted ${batch.length} originals`);
-      }
-
-      for (const video of batch) {
-        if (video.file_size_bytes) totalBytesReclaimed += video.file_size_bytes;
-      }
-      deletedCount += batch.length;
-    }
-  }
-
-  // ── Phase 3: Failed videos (never produced a result) ─────────────
-  if (INCLUDE_FAILED) {
-    console.log('\nPhase 3: Querying failed videos (no processed result exists)...');
-
-    let failedVideos = [];
-    let fPage = 0;
-    const F_PAGE_SIZE = 1000;
-    while (true) {
-      const { data, error: fErr } = await supabase
-        .from('videos')
-        .select('id, title, original_storage_path, file_size_bytes')
-        .eq('submagic_status', 'failed')
-        .range(fPage * F_PAGE_SIZE, (fPage + 1) * F_PAGE_SIZE - 1);
-
-      if (fErr) {
-        console.error('Query failed:', fErr.message);
-        process.exit(1);
-      }
-      if (!data || data.length === 0) break;
-      failedVideos = failedVideos.concat(data);
-      if (data.length < F_PAGE_SIZE) break;
-      fPage++;
-    }
-
-    console.log(`  Found ${failedVideos.length} failed video(s).`);
-
-    const BATCH_SIZE_F = 20;
-    for (let i = 0; i < failedVideos.length; i += BATCH_SIZE_F) {
-      const batch = failedVideos.slice(i, i + BATCH_SIZE_F);
-      const paths = batch.map(v => v.original_storage_path);
-
-      if (DRY_RUN) {
-        for (const video of batch) {
-          const sizeStr = video.file_size_bytes
-            ? `${(video.file_size_bytes / (1024 * 1024)).toFixed(1)} MB`
-            : 'unknown size';
-          console.log(`  [${video.title || video.id}] WOULD DELETE original (${sizeStr})`);
-        }
-      } else {
-        const { error: deleteError } = await supabase.storage
-          .from('videos')
-          .remove(paths);
-
-        if (deleteError) {
-          console.warn(`  Batch ${Math.floor(i / BATCH_SIZE_F) + 1} DELETE FAILED: ${deleteError.message}`);
-          skippedCount += batch.length;
-          continue;
-        }
-        console.log(`  Batch ${Math.floor(i / BATCH_SIZE_F) + 1}: deleted ${batch.length} originals`);
-      }
-
-      for (const video of batch) {
-        if (video.file_size_bytes) totalBytesReclaimed += video.file_size_bytes;
-      }
-      deletedCount += batch.length;
-    }
-  }
-
-  // ── Summary ─────────────────────────────────────────────────────
-  const totalMB = (totalBytesReclaimed / (1024 * 1024)).toFixed(1);
-  const totalGB = (totalBytesReclaimed / (1024 * 1024 * 1024)).toFixed(2);
-
-  const modeFlags = [INCLUDE_URLS ? 'include-urls' : '', INCLUDE_FAILED ? 'failed' : ''].filter(Boolean).join(' + ');
   console.log('\n── Summary ──────────────────────────────────────────');
-  console.log(`  Mode:         ${DRY_RUN ? 'DRY RUN' : 'EXECUTE'}${modeFlags ? ' + ' + modeFlags : ''}`);
-  console.log(`  ${DRY_RUN ? 'Would delete' : 'Deleted'}:  ${deletedCount} original file(s)`);
-  console.log(`  Skipped:      ${skippedCount} file(s)`);
+  console.log(`  Mode:         ${summary.dryRun ? 'DRY RUN' : 'EXECUTE'}`);
+  console.log(`  Retention:    ${summary.retentionDays} day(s) (cutoff: ${summary.cutoffIso})`);
+  console.log(`  Scanned:      ${summary.scanned} video(s)`);
+  console.log(`  Eligible:     ${summary.eligible} video(s)`);
+  console.log(`  ${summary.dryRun ? 'Would delete' : 'Deleted'}:  ${summary.deletedOrWouldDelete} original file(s)`);
+  console.log(`  Skipped:      ${summary.skipped} file(s)`);
+  console.log(`  Errors:       ${summary.errors} file(s)`);
   console.log(`  Reclaimed:    ~${totalMB} MB (${totalGB} GB)`);
+  if (summary.capped) {
+    console.log(`  Capped:       yes — ${summary.backlogRemaining} more eligible video(s) beyond this run's limit`);
+  }
 
-  if (DRY_RUN && deletedCount > 0) {
+  if (summary.dryRun && summary.deletedOrWouldDelete > 0) {
     console.log('\n  Run with --execute to perform deletions.');
   }
 }
