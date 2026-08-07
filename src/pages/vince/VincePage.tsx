@@ -538,81 +538,101 @@ const VincePage: React.FC = () => {
     setProcessingState({ status: 'idle' });
   }, [setSelectedFile]);
 
+  // Step A: Upload the source video to storage and create its DB record.
+  // Kept separate from triggering Submagic so a future trim step can run
+  // between this and submitVideoForCaptioning() without touching upload logic.
+  const uploadAndCreateVideoRecord = async (file: File): Promise<{ videoRecord: Video; signedUrl: string }> => {
+    setUploadState({ status: 'uploading', progress: 0, filename: file.name });
+
+    const { path, url } = await uploadVideoToStorage(file, user!.id, (progress) => {
+      setUploadState({ status: 'uploading', progress, filename: file.name });
+    });
+
+    setUploadState({ status: 'uploaded', videoId: '', storagePath: path });
+
+    setProcessingState({ status: 'creating', message: 'Creating video record...' });
+
+    const videoRecord = await createVideoRecord({
+      user_id: user!.id,
+      title: videoTitle || file.name,
+      original_filename: file.name,
+      file_size_bytes: file.size,
+      duration_seconds: null,
+      original_storage_path: path,
+      processed_storage_path: null,
+      submagic_project_id: null,
+      submagic_status: 'pending',
+      submagic_download_url: null,
+      template_name: selectedTemplate.submagicTemplateName,
+      language,
+      magic_zooms: magicZooms,
+      magic_brolls: magicBrolls,
+      magic_brolls_percentage: magicBrollsPercentage,
+      // New enhancement fields
+      remove_silence_pace: removeSilencePace !== 'off' ? removeSilencePace : null,
+      remove_bad_takes: removeBadTakes,
+      hook_title_enabled: hookTitleEnabled,
+      hook_title_text: hookTitleText.trim() || null,
+      hook_title_position: hookTitleEnabled ? hookTitlePosition : null,
+      caption_position_x: captionPositionX,
+      caption_position_y: captionPositionY,
+      error_message: null,
+      retry_count: 0,
+      processing_started_at: null,
+      processing_completed_at: null,
+    });
+
+    setCurrentVideoId(videoRecord.id);
+
+    return { videoRecord, signedUrl: url };
+  };
+
+  // Step B: Submit the (currently: untrimmed) video to Submagic for captioning.
+  // Takes an explicit signedUrl/title so a future trim step can hand this a
+  // signed URL pointing at a trimmed file instead of the original.
+  const submitVideoForCaptioning = async (
+    videoRecord: Video,
+    signedUrl: string,
+    title: string
+  ): Promise<void> => {
+    setProcessingState({ status: 'processing', projectId: '', progress: 10 });
+
+    const projectId = await processVideo(videoRecord.id, user!.id, signedUrl, {
+      title,
+      templateName: selectedTemplate.submagicTemplateName,
+      language,
+      magicZooms,
+      magicBrolls,
+      magicBrollsPercentage,
+      // New enhancement options - only pass if enabled/has value
+      removeSilencePace: removeSilencePace !== 'off' ? removeSilencePace : undefined,
+      removeBadTakes: removeBadTakes || undefined,
+      hookTitle: hookTitleEnabled
+        ? (hookTitleText.trim()
+          ? { text: hookTitleText.trim(), top: hookTitlePosition }
+          : { top: hookTitlePosition })
+        : undefined,
+      // Only sent if the user actually touched the slider (null = untouched)
+      captionPositionX: captionPositionX ?? undefined,
+      captionPositionY: captionPositionY ?? undefined,
+    });
+
+    setCurrentProjectId(projectId);
+    setProcessingState({ status: 'processing', projectId, progress: 20 });
+    showToast('Video processing started!', 'info');
+  };
+
   // Process video
   const handleProcessVideo = async () => {
     if (!selectedFile || !user) return;
 
     try {
-      // Step 1: Upload to Supabase Storage
-      setUploadState({ status: 'uploading', progress: 0, filename: selectedFile.name });
+      const { videoRecord, signedUrl } = await uploadAndCreateVideoRecord(selectedFile);
 
-      const { path, url } = await uploadVideoToStorage(selectedFile, user.id, (progress) => {
-        setUploadState({ status: 'uploading', progress, filename: selectedFile.name });
-      });
-
-      setUploadState({ status: 'uploaded', videoId: '', storagePath: path });
-
-      // Step 2: Create database record
-      setProcessingState({ status: 'creating', message: 'Creating video record...' });
-
-      const videoRecord = await createVideoRecord({
-        user_id: user.id,
-        title: videoTitle || selectedFile.name,
-        original_filename: selectedFile.name,
-        file_size_bytes: selectedFile.size,
-        duration_seconds: null,
-        original_storage_path: path,
-        processed_storage_path: null,
-        submagic_project_id: null,
-        submagic_status: 'pending',
-        submagic_download_url: null,
-        template_name: selectedTemplate.submagicTemplateName,
-        language,
-        magic_zooms: magicZooms,
-        magic_brolls: magicBrolls,
-        magic_brolls_percentage: magicBrollsPercentage,
-        // New enhancement fields
-        remove_silence_pace: removeSilencePace !== 'off' ? removeSilencePace : null,
-        remove_bad_takes: removeBadTakes,
-        hook_title_enabled: hookTitleEnabled,
-        hook_title_text: hookTitleText.trim() || null,
-        hook_title_position: hookTitleEnabled ? hookTitlePosition : null,
-        caption_position_x: captionPositionX,
-        caption_position_y: captionPositionY,
-        error_message: null,
-        retry_count: 0,
-        processing_started_at: null,
-        processing_completed_at: null,
-      });
-
-      setCurrentVideoId(videoRecord.id);
-
-      // Step 3: Start Submagic processing
-      setProcessingState({ status: 'processing', projectId: '', progress: 10 });
-
-      const projectId = await processVideo(videoRecord.id, user.id, url, {
-        title: videoTitle || selectedFile.name,
-        templateName: selectedTemplate.submagicTemplateName,
-        language,
-        magicZooms,
-        magicBrolls,
-        magicBrollsPercentage,
-        // New enhancement options - only pass if enabled/has value
-        removeSilencePace: removeSilencePace !== 'off' ? removeSilencePace : undefined,
-        removeBadTakes: removeBadTakes || undefined,
-        hookTitle: hookTitleEnabled
-          ? (hookTitleText.trim()
-            ? { text: hookTitleText.trim(), top: hookTitlePosition }
-            : { top: hookTitlePosition })
-          : undefined,
-        // Only sent if the user actually touched the slider (null = untouched)
-        captionPositionX: captionPositionX ?? undefined,
-        captionPositionY: captionPositionY ?? undefined,
-      });
-
-      setCurrentProjectId(projectId);
-      setProcessingState({ status: 'processing', projectId, progress: 20 });
-      showToast('Video processing started!', 'info');
+      // Future trim step goes here, between upload/record-creation and
+      // submitting to Submagic: it would produce its own signed URL for the
+      // trimmed file and pass that (instead of `signedUrl`) below.
+      await submitVideoForCaptioning(videoRecord, signedUrl, videoTitle || selectedFile.name);
 
     } catch (error) {
       console.error('Process video error:', error);
