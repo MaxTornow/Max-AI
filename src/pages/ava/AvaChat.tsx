@@ -71,11 +71,13 @@ const AvaChat: React.FC = () => {
   const [historyChecked, setHistoryChecked] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const lastMessageRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Auto-scroll to bottom when messages change
+  // Scroll the newest message's top into view (rather than snapping to the
+  // bottom), so long messages are readable from the start.
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    lastMessageRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [messages]);
 
   // We don't auto-select a style to be consistent with FRANCK and LACY components
@@ -427,8 +429,8 @@ const AvaChat: React.FC = () => {
       
       {/* Chat messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.map((msg) => (
-          <div key={msg.id}>
+        {messages.map((msg, index) => (
+          <div key={msg.id} ref={index === messages.length - 1 ? lastMessageRef : undefined}>
             {renderMessage(msg)}
           </div>
         ))}
