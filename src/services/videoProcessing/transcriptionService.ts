@@ -245,7 +245,8 @@ export const pollForTranscriptionCompletion = async (
     if (transcription.status === 'completed') {
       return transcription;
     } else if (transcription.status === 'error') {
-      throw new Error(`Transcription failed: ${transcription.status}`);
+      console.error('AssemblyAI transcription error response:', transcription);
+      throw new Error(`Transcription failed: ${transcription.error || 'unknown error'}`);
     } else if (attempts >= maxAttempts) {
       throw new Error('Transcription timed out');
     }
