@@ -16,17 +16,16 @@
   status = 200
   force = true
 
-# Proxy for video downloads to handle HTTP/HTTPS mixed content
-[[redirects]]
-  from = "/api/video-proxy/*"
-  to = "/.netlify/functions/video-proxy"
-  status = 200
-  force = true
-
 # Claude API via Edge Function (API key stays server-side)
 [[edge_functions]]
   path = "/api/claude-generate"
   function = "claude-generate"
+
+# Streams video downloads server-side to route around CDN CORS blocks (Instagram/TikTok).
+# Edge Function so it can stream the response instead of buffering it (no size cap).
+[[edge_functions]]
+  path = "/api/video-download"
+  function = "video-download"
 
 # SPA fallback
 [[redirects]]

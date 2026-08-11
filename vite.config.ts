@@ -33,7 +33,7 @@ export default defineConfig(({ mode }) => {
         'Cross-Origin-Embedder-Policy': 'require-corp'
       },
       proxy: {
-        '/api/video-proxy': {
+        '/api/video-download': {
           target: 'https://scontent.cdninstagram.com', // Default Instagram CDN
           changeOrigin: true,
           secure: true,
