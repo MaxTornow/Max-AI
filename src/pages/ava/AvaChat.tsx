@@ -71,13 +71,27 @@ const AvaChat: React.FC = () => {
   const [historyChecked, setHistoryChecked] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
   const lastMessageRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Scroll the newest message's top into view (rather than snapping to the
-  // bottom), so long messages are readable from the start.
+  // bottom), so long messages are readable from the start. Computed directly
+  // against the scroll container's own scrollTop (rather than
+  // scrollIntoView) so it's not thrown off by nested flex/overflow ancestors.
   useEffect(() => {
-    lastMessageRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const container = chatContainerRef.current;
+    const target = lastMessageRef.current;
+    if (!container || !target) return;
+
+    const frame = requestAnimationFrame(() => {
+      const containerRect = container.getBoundingClientRect();
+      const targetRect = target.getBoundingClientRect();
+      const offset = targetRect.top - containerRect.top + container.scrollTop;
+      container.scrollTo({ top: offset, behavior: 'smooth' });
+    });
+
+    return () => cancelAnimationFrame(frame);
   }, [messages]);
 
   // We don't auto-select a style to be consistent with FRANCK and LACY components
@@ -428,7 +442,7 @@ const AvaChat: React.FC = () => {
       {/* Chat content area begins here */}
       
       {/* Chat messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4" ref={chatContainerRef}>
         {messages.map((msg, index) => (
           <div key={msg.id} ref={index === messages.length - 1 ? lastMessageRef : undefined}>
             {renderMessage(msg)}
