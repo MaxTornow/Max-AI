@@ -553,14 +553,6 @@ const CreateRewrite: React.FC = () => {
 
   
   /**
-   * Handle style selection change
-   * @param {React.ChangeEvent<HTMLSelectElement>} e - Select change event
-   */
-  const handleStyleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setSelectedStyleId(e.target.value);
-  };
-  
-  /**
    * Open the style form modal
    */
   const openStyleModal = () => {
@@ -670,29 +662,29 @@ const CreateRewrite: React.FC = () => {
           <div className="p-4 border-t dark:border-gray-700">
             {/* Style Selection */}
             <div className="mb-6">
-              <label htmlFor="styleSelect" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Choose Info
               </label>
-              <div className="flex items-center space-x-3">
-                <select
-                  id="styleSelect"
-                  value={selectedStyleId}
-                  onChange={handleStyleChange}
-                  className="flex-1 p-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
-                  disabled={isLoading || styles.length === 0}
-                >
-                  <option value="">Select info...</option>
-                  {styles.map(style => (
-                    <option key={style.id} value={style.id}>
-                      {style.name}
-                    </option>
-                  ))}
-                </select>
+              <div className="flex flex-wrap items-center gap-2">
+                {styles.map(style => (
+                  <button
+                    key={style.id}
+                    type="button"
+                    onClick={() => setSelectedStyleId(style.id)}
+                    className={`px-4 py-2 rounded-md border text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 ${
+                      selectedStyleId === style.id
+                        ? 'bg-primary-600 border-primary-600 text-white'
+                        : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-primary-500'
+                    }`}
+                  >
+                    {style.name}
+                  </button>
+                ))}
                 <button
                   type="button"
                   onClick={openStyleModal}
                   className="p-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
-                  title="Create New Style"
+                  title="Create New Info"
                 >
                   <FiPlus size={20} />
                 </button>
@@ -705,7 +697,7 @@ const CreateRewrite: React.FC = () => {
               )}
               {!isLoading && styles.length === 0 && !error && (
                 <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                  No styles found. Create a new style to continue.
+                  No info found. Click + to create one to continue.
                 </p>
               )}
             </div>
