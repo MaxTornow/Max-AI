@@ -146,6 +146,7 @@ async function main() {
   console.log(`  Eligible:     ${summary.eligible} video(s)`);
   console.log(`  ${summary.dryRun ? 'Would delete' : 'Deleted'}:  ${summary.deletedOrWouldDelete} original file(s)`);
   console.log(`  Skipped:      ${summary.skipped} file(s)`);
+  console.log(`  Not found:    ${summary.notFound} file(s) (remove() succeeded but matched nothing — already gone)`);
   console.log(`  Errors:       ${summary.errors} file(s)`);
   console.log(`  Reclaimed:    ~${totalMB} MB (${totalGB} GB)`);
   if (summary.capped) {

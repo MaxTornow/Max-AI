@@ -12,6 +12,25 @@
  *   - Phase 'failed' (submagic_status = 'failed'): updated_at (failed videos
  *     have no completion date — this is when they were marked failed)
  *
+ * Every phase query also filters on original_deleted_at IS NULL (see
+ * src/sql/012_videos_original_deleted_at.sql). Without that, a row whose
+ * original was already deleted would keep matching the same
+ * status/date filters forever and get re-selected as "eligible" on every
+ * future run — original_storage_path stays populated in the DB after the
+ * file itself is gone, so there'd be nothing else to distinguish
+ * "not yet cleaned up" from "already cleaned up". A successful (non-dry-run)
+ * delete sets original_deleted_at via markOriginalsDeleted() below, whether
+ * or not the object actually existed at delete time (see notFound below) —
+ * either way the end state (no original present) is the same, so there's
+ * nothing left for a future run to act on.
+ *
+ * remove()'s returned data array is checked against the requested path(s):
+ * Supabase Storage's remove() reports success even when a path doesn't
+ * match any object, so a null `error` alone doesn't prove a file was
+ * actually there and removed. Paths that don't appear in the returned data
+ * are counted as `notFound` (and excluded from `deletedOrWouldDelete` /
+ * `bytesReclaimed`) rather than being folded into blanket success.
+ *
  * This file is deliberately .cjs (CommonJS), not .mjs, even though the rest
  * of this project is "type": "module". Netlify's function bundler can trace
  * and transform this file's *content* to CommonJS while leaving an .mjs
@@ -57,6 +76,7 @@ async function fetchLocalPhaseRows(supabase, cutoffIso) {
       .not('processed_storage_path', 'like', 'http%')
       .not('processing_completed_at', 'is', null)
       .lte('processing_completed_at', cutoffIso)
+      .is('original_deleted_at', null)
       .range(from, to)
   );
   return rows.map((row) => ({ ...row, phase: 'local' }));
@@ -72,6 +92,7 @@ async function fetchUrlPhaseRows(supabase, cutoffIso) {
       .like('processed_storage_path', 'http%')
       .not('processing_completed_at', 'is', null)
       .lte('processing_completed_at', cutoffIso)
+      .is('original_deleted_at', null)
       .range(from, to)
   );
   return rows.map((row) => ({ ...row, phase: 'url' }));
@@ -85,9 +106,28 @@ async function fetchFailedPhaseRows(supabase, cutoffIso) {
       .select('id, title, original_storage_path, file_size_bytes, updated_at')
       .eq('submagic_status', 'failed')
       .lte('updated_at', cutoffIso)
+      .is('original_deleted_at', null)
       .range(from, to)
   );
   return rows.map((row) => ({ ...row, phase: 'failed' }));
+}
+
+/**
+ * Marks rows as cleaned up (sets original_deleted_at) so they drop out of
+ * eligibility on future runs. Called after remove() succeeds, regardless of
+ * whether it actually matched a file — an object absent from Storage and an
+ * object we just removed both end in the same state (nothing there), so
+ * either way there's nothing left for a future run to (re)delete.
+ */
+async function markOriginalsDeleted(supabase, ids, warn) {
+  if (ids.length === 0) return;
+  const { error } = await supabase
+    .from('videos')
+    .update({ original_deleted_at: new Date().toISOString() })
+    .in('id', ids);
+  if (error) {
+    warn(`  Failed to record original_deleted_at for ${ids.length} video(s): ${error.message}`);
+  }
 }
 
 function sizeStrFor(video) {
@@ -149,6 +189,7 @@ async function runCleanupOriginals(supabase, options = {}) {
   let deletedOrWouldDelete = 0;
   let skipped = 0;
   let errors = 0;
+  let notFound = 0;
   let bytesReclaimed = 0;
 
   // ── Phase 'local': verify processed file exists, then delete one at a time ──
@@ -173,18 +214,37 @@ async function runCleanupOriginals(supabase, options = {}) {
 
     if (dryRun) {
       log(`  ${label} WOULD DELETE original (${sizeStrFor(video)}): ${video.original_storage_path}`);
-    } else {
-      const { error: deleteError } = await supabase.storage.from('videos').remove([video.original_storage_path]);
-      if (deleteError) {
-        warn(`  ${label} DELETE FAILED: ${deleteError.message}`);
-        errors++;
-        continue;
-      }
-      log(`  ${label} DELETED original (${sizeStrFor(video)}): ${video.original_storage_path}`);
+      deletedOrWouldDelete++;
+      if (video.file_size_bytes) bytesReclaimed += video.file_size_bytes;
+      continue;
     }
 
-    deletedOrWouldDelete++;
-    if (video.file_size_bytes) bytesReclaimed += video.file_size_bytes;
+    const { data: removeData, error: deleteError } = await supabase.storage
+      .from('videos')
+      .remove([video.original_storage_path]);
+
+    if (deleteError) {
+      warn(`  ${label} DELETE FAILED: ${deleteError.message}`);
+      errors++;
+      continue;
+    }
+
+    // remove() can report success without actually matching a file (e.g.
+    // the object was already gone). Only count it as reclaimed if the
+    // response confirms it was actually there and removed.
+    const actuallyRemoved = Array.isArray(removeData) && removeData.some((d) => d.name === video.original_storage_path);
+    if (actuallyRemoved) {
+      log(`  ${label} DELETED original (${sizeStrFor(video)}): ${video.original_storage_path}`);
+      deletedOrWouldDelete++;
+      if (video.file_size_bytes) bytesReclaimed += video.file_size_bytes;
+    } else {
+      warn(`  ${label} NOT FOUND — remove() succeeded but did not match ${video.original_storage_path} (already gone?)`);
+      notFound++;
+    }
+
+    // Either way, the original is confirmed absent now — mark it so this
+    // row drops out of eligibility on future runs.
+    await markOriginalsDeleted(supabase, [video.id], warn);
   }
 
   // ── Phases 'url' and 'failed': no per-row check, batched delete ──
@@ -200,26 +260,42 @@ async function runCleanupOriginals(supabase, options = {}) {
     for (let i = 0; i < rows.length; i += DELETE_BATCH_SIZE) {
       const batch = rows.slice(i, i + DELETE_BATCH_SIZE);
       eligible += batch.length;
-      const paths = batch.map((v) => v.original_storage_path);
 
       if (dryRun) {
         for (const video of batch) {
           log(`  [${video.title || video.id}] WOULD DELETE original (${sizeStrFor(video)})`);
         }
-      } else {
-        const { error: deleteError } = await supabase.storage.from('videos').remove(paths);
-        if (deleteError) {
-          warn(`  Batch DELETE FAILED (${phaseName}): ${deleteError.message}`);
-          errors += batch.length;
-          continue;
+        deletedOrWouldDelete += batch.length;
+        for (const video of batch) {
+          if (video.file_size_bytes) bytesReclaimed += video.file_size_bytes;
         }
-        log(`  Batch: deleted ${batch.length} original(s) (${phaseName})`);
+        continue;
       }
 
-      deletedOrWouldDelete += batch.length;
-      for (const video of batch) {
-        if (video.file_size_bytes) bytesReclaimed += video.file_size_bytes;
+      const paths = batch.map((v) => v.original_storage_path);
+      const { data: removeData, error: deleteError } = await supabase.storage.from('videos').remove(paths);
+
+      if (deleteError) {
+        warn(`  Batch DELETE FAILED (${phaseName}): ${deleteError.message}`);
+        errors += batch.length;
+        continue;
       }
+
+      const removedNames = new Set((removeData || []).map((d) => d.name));
+      for (const video of batch) {
+        if (removedNames.has(video.original_storage_path)) {
+          deletedOrWouldDelete++;
+          if (video.file_size_bytes) bytesReclaimed += video.file_size_bytes;
+        } else {
+          warn(`  [${video.title || video.id}] NOT FOUND — remove() succeeded but did not match ${video.original_storage_path} (already gone?)`);
+          notFound++;
+        }
+      }
+      log(`  Batch: ${removedNames.size}/${batch.length} original(s) confirmed removed (${phaseName})`);
+
+      // Either way, the originals are confirmed absent now — mark the whole
+      // batch so these rows drop out of eligibility on future runs.
+      await markOriginalsDeleted(supabase, batch.map((v) => v.id), warn);
     }
   }
 
@@ -233,6 +309,7 @@ async function runCleanupOriginals(supabase, options = {}) {
     eligible,
     deletedOrWouldDelete,
     skipped,
+    notFound,
     errors,
     bytesReclaimed,
     capped,

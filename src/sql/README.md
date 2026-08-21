@@ -15,6 +15,7 @@ This folder contains all SQL scripts needed to set up the Supabase database and 
 | `007_videos.sql` | BETTY video records | In Production |
 | `008_videos_storage_policies.sql` | Storage bucket RLS policies | **REQUIRED** |
 | `011_expand_conversation_agent_types.sql` | Allow 'sage'/'aimax' as agent_type | **REQUIRED** (run once on existing databases) |
+| `012_videos_original_deleted_at.sql` | Tracks when a video's original was actually deleted, so the retention-window cleanup job doesn't re-select already-cleaned rows | **REQUIRED** (run once on existing databases) |
 
 ## Running Order
 
