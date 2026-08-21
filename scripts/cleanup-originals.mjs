@@ -15,7 +15,7 @@
  *
  * This is the manual entry point. The same logic also runs on a schedule via
  * netlify/functions/cleanup-originals-run.js (triggered by n8n) — both call
- * scripts/lib/cleanupOriginals.mjs so they can't drift out of sync.
+ * scripts/lib/cleanupOriginals.cjs so they can't drift out of sync.
  *
  * Age is measured from the video's *completion* date, not its upload date:
  *   - Phase local & url (completed videos): `processing_completed_at`
@@ -57,7 +57,7 @@
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 import { createClient } from '@supabase/supabase-js';
-import { runCleanupOriginals, DEFAULT_RETENTION_DAYS } from './lib/cleanupOriginals.mjs';
+import { runCleanupOriginals, DEFAULT_RETENTION_DAYS } from './lib/cleanupOriginals.cjs';
 
 // ── Arg parsing ─────────────────────────────────────────────────────
 const args = process.argv.slice(2);

@@ -3,7 +3,7 @@
  * n8n on a schedule (POST request with a shared-secret header).
  *
  * Shares its query/deletion logic with the manual CLI
- * (scripts/cleanup-originals.mjs) via scripts/lib/cleanupOriginals.mjs, so
+ * (scripts/cleanup-originals.mjs) via scripts/lib/cleanupOriginals.cjs, so
  * the two entry points can't drift out of sync.
  *
  * Safety:
@@ -27,10 +27,29 @@
  *   SUPABASE_URL (or VITE_SUPABASE_URL)
  *   SUPABASE_SERVICE_ROLE_KEY
  *   CLEANUP_TRIGGER_SECRET
+ *
+ * IMPORTANT — this file must stay a plain .js entry (not renamed to .mjs):
+ * Netlify's function bundler can select either an esbuild full-bundle
+ * strategy or an nft (Node File Trace) strategy depending on the build
+ * environment, and under nft the entry file still gets CJS-transpiled
+ * content (module.exports, etc.) regardless of its own extension — an .mjs
+ * extension then forces Node to parse that CJS content as ESM, which
+ * crashes on the first `module.exports` line. A .js entry lets Node use
+ * whichever module system the bundler actually emitted.
+ *
+ * scripts/lib/cleanupOriginals.cjs (deliberately CommonJS — see its own
+ * header comment for why) is loaded via a dynamic import() below rather
+ * than a static import, for the same bundler-strategy-independence reason:
+ * dynamic import() is never rewritten to require() by any bundler (its
+ * Promise-based semantics wouldn't survive that), so it works correctly
+ * regardless of which bundling strategy Netlify picks for this function.
+ * Verified locally against @netlify/zip-it-and-ship-it under both
+ * 'esbuild' and 'nft' nodeBundler modes by compiling the real function,
+ * extracting the zip, and require()-ing + invoking the compiled handler in
+ * a fresh Node process — see PR discussion for repro details.
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { runCleanupOriginals, DEFAULT_RETENTION_DAYS } from '../../scripts/lib/cleanupOriginals.mjs';
 
 const MAX_PER_RUN = 300;
 
@@ -56,6 +75,8 @@ export const handler = async (event) => {
   } catch {
     return jsonResponse(400, { ok: false, error: 'Invalid JSON body.' });
   }
+
+  const { runCleanupOriginals, DEFAULT_RETENTION_DAYS } = await import('../../scripts/lib/cleanupOriginals.cjs');
 
   const retentionDays = typeof body.retentionDays === 'number' ? body.retentionDays : DEFAULT_RETENTION_DAYS;
   const includeUrls = body.includeUrls === true;

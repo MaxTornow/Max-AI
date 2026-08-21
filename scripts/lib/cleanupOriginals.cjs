@@ -11,9 +11,18 @@
  *   - Phases 'local' and 'url' (submagic_status = 'completed'): processing_completed_at
  *   - Phase 'failed' (submagic_status = 'failed'): updated_at (failed videos
  *     have no completion date — this is when they were marked failed)
+ *
+ * This file is deliberately .cjs (CommonJS), not .mjs, even though the rest
+ * of this project is "type": "module". Netlify's function bundler can trace
+ * and transform this file's *content* to CommonJS while leaving an .mjs
+ * *extension* untouched — Node then refuses to load it (the extension forces
+ * ESM parsing, but the content is CJS). A .cjs extension is unambiguous
+ * either way, so there's nothing for a bundler-version difference to get
+ * wrong. Both consumers (the ESM CLI script and the Netlify function) import
+ * this via a CJS-from-ESM path, which Node supports natively.
  */
 
-export const DEFAULT_RETENTION_DAYS = 30;
+const DEFAULT_RETENTION_DAYS = 30;
 
 const PAGE_SIZE = 1000;
 const DELETE_BATCH_SIZE = 20;
@@ -102,7 +111,7 @@ function sizeStrFor(video) {
  * @param {(...args: any[]) => void} [options.log]
  * @param {(...args: any[]) => void} [options.warn]
  */
-export async function runCleanupOriginals(supabase, options = {}) {
+async function runCleanupOriginals(supabase, options = {}) {
   const {
     retentionDays = DEFAULT_RETENTION_DAYS,
     includeUrls = false,
@@ -230,3 +239,5 @@ export async function runCleanupOriginals(supabase, options = {}) {
     backlogRemaining,
   };
 }
+
+module.exports = { runCleanupOriginals, DEFAULT_RETENTION_DAYS };
