@@ -1,173 +1,120 @@
-# Plan: Auto-Delete Original Videos After Processing + One-Time Cleanup
+# Plan: Retention-Window Cleanup of Original Videos
+
+## Status
+
+**Revised 2026-08-07.** The original version of this plan (auto-delete the
+original immediately once Submagic captioning finished) has been reverted.
+Immediate deletion left no window for future features — re-processing,
+re-downloading, or trimming — to use the original once captioning was done,
+and it removed the seam a planned trim/cut feature needs (trim has to run
+*before* captioning, on a file that's still there).
+
+The storage constraint that motivated auto-deletion in the first place is
+still real (see Context below), so this isn't "keep everything forever" —
+it's a **30-day retention window**: originals are kept after captioning
+completes and only reclaimed once they're older than the window, via a
+scheduled cleanup job instead of an immediate delete in the completion path.
+
+---
 
 ## Context
 
-Supabase Storage is at **103.32 GB / 100 GB** (Pro Plan). All storage is VINCE videos. The root cause: both original uploads AND processed videos are kept forever with no cleanup. After processing completes, the original serves no purpose — users only download the processed version. Deleting originals for completed videos should reclaim ~50% of storage immediately, and auto-deleting going forward prevents recurrence.
+Supabase Storage hit **103.32 GB / 100 GB** (Pro Plan). All storage is VINCE
+videos. The root cause: both original uploads AND processed videos were kept
+forever with no cleanup. Once a video's processed version has existed for
+long enough that nobody is realistically going back to trim/re-process it,
+the original stops earning its keep — but "long enough" is now a window
+(default 30 days), not "the instant captioning finishes."
 
-**Zero room for error** — we never delete an original unless the processed version is confirmed saved in Supabase Storage (not a URL fallback).
-
----
-
-## Files to Modify
-
-| File | Change |
-|------|--------|
-| `src/services/vince/index.ts` | Add `deleteOriginalVideo()` and `completeVideoProcessing()` |
-| `src/pages/vince/VincePage.tsx` | Replace 3 duplicated completion code blocks with single `completeVideoProcessing()` call |
-| `scripts/cleanup-originals.mjs` | **New file** — one-time cleanup script for existing completed videos |
+**Zero room for error** — we never delete an original unless the processed
+version is confirmed saved in Supabase Storage (not a URL fallback), and now
+also only once it's past the retention window.
 
 ---
 
-## Part 1: Add Centralized Completion Logic (`src/services/vince/index.ts`)
+## Current Behavior (as implemented)
 
-### 1a. Add `deleteOriginalVideo()` (after `saveProcessedVideo`, ~line 201)
-
-```typescript
-export const deleteOriginalVideo = async (
-  originalStoragePath: string
-): Promise<void> => {
-  console.log('Cleaning up original video file:', originalStoragePath);
-  const { error } = await supabase.storage
-    .from('videos')
-    .remove([originalStoragePath]);
-  if (error) {
-    console.warn('Failed to delete original video (non-fatal):', error);
-  } else {
-    console.log('Original video deleted successfully:', originalStoragePath);
-  }
-};
-```
-
-- Uses existing authenticated Supabase client (RLS allows users to delete in their own `{userId}/` folder)
-- Errors are **non-fatal** — logged as warnings, never thrown
-- Idempotent — calling on an already-deleted file returns success (Supabase `remove` behavior)
-
-### 1b. Add `completeVideoProcessing()` (after `deleteOriginalVideo`)
-
-```typescript
-export const completeVideoProcessing = async (
-  videoId: string,
-  userId: string,
-  originalFilename: string,
-  originalStoragePath: string,
-  downloadUrl: string
-): Promise<string> => {
-  // 1. Download from Submagic and save to Supabase Storage
-  const processedPath = await saveProcessedVideo(downloadUrl, userId, originalFilename);
-
-  // 2. Update database record
-  await updateVideoRecord(videoId, {
-    submagic_status: 'completed',
-    processed_storage_path: processedPath,
-    submagic_download_url: downloadUrl,
-    processing_completed_at: new Date().toISOString(),
-  });
-
-  // 3. Delete original ONLY if processed was saved to storage (not URL fallback)
-  if (!processedPath.startsWith('http')) {
-    await deleteOriginalVideo(originalStoragePath);
-  }
-
-  return processedPath;
-};
-```
-
-**Critical safety gate:** `!processedPath.startsWith('http')` — when `saveProcessedVideo` fails to download from Submagic (CORS), it returns the CDN URL as fallback. In that case, no processed file exists in our storage, so we must keep the original.
+| File | Behavior |
+|------|----------|
+| `src/services/vince/index.ts` | `completeVideoProcessing()` saves the processed video and updates the DB record, but does **not** call `deleteOriginalVideo()`. The original is left in place after captioning. `deleteOriginalVideo()` still exists as a function, just isn't called automatically. |
+| `src/pages/vince/VincePage.tsx` | `handleProcessVideo()` is split into `uploadAndCreateVideoRecord()` (upload + DB record) and `submitVideoForCaptioning()` (triggers Submagic), called back-to-back today. This is the seam a future trim step will insert into, between upload and the Submagic call. |
+| `scripts/cleanup-originals.mjs` | Adapted from a one-time cleanup script into retention-window cleanup logic (see below). Not yet wired to a scheduler. |
 
 ---
 
-## Part 2: Replace 3 Duplicated Completion Paths (`VincePage.tsx`)
-
-Currently, 3 places in VincePage.tsx repeat the same `saveProcessedVideo` → `updateVideoRecord` pattern. Replace all 3 with a single `completeVideoProcessing()` call.
-
-### Import change (line ~24)
-
-- Add `completeVideoProcessing` to imports from `@services/vince`
-- Remove `saveProcessedVideo` from imports (no longer called directly from VincePage)
-- Keep `updateVideoRecord` (still used for failure handling elsewhere)
-
-### Path 1: Timeout sync (lines 254–265)
-
-Replace `saveProcessedVideo` + `updateVideoRecord` block with:
-
-```typescript
-await completeVideoProcessing(
-  video.id, user!.id, video.original_filename,
-  video.original_storage_path, videoUrl
-);
-```
-
-### Path 2: Normal sync (lines 287–294)
-
-Same replacement — `video` object has `original_storage_path`:
-
-```typescript
-await completeVideoProcessing(
-  video.id, user!.id, video.original_filename,
-  video.original_storage_path, videoUrl
-);
-```
-
-### Path 3: Active polling (lines 432–445)
-
-Uses `selectedFile?.name` and needs `original_storage_path` from `uploadState`:
-
-```typescript
-await completeVideoProcessing(
-  currentVideoId, user!.id,
-  selectedFile?.name || 'video.mp4',
-  uploadState.status === 'uploaded' ? uploadState.storagePath : '',
-  videoUrl
-);
-```
-
-`uploadState.storagePath` is always set before polling reaches completion:
-
-- Set at line 553 during initial upload
-- Set at line 321 during sync UI restore
-- If somehow empty, `deleteOriginalVideo('')` is a safe no-op
-
----
-
-## Part 3: One-Time Cleanup Script (`scripts/cleanup-originals.mjs`)
-
-Follows existing conventions from `scripts/update-transcripts.mjs`: `.mjs`, manual `.env` loading, service role key, `--dry-run`.
+## Retention-Window Cleanup Script (`scripts/cleanup-originals.mjs`)
 
 ### Logic
 
 1. **Load env** — `SUPABASE_URL` (or `VITE_SUPABASE_URL`) + `SUPABASE_SERVICE_ROLE_KEY`
 2. **Create admin client** — `createClient(url, serviceRoleKey)` to bypass RLS
-3. **Query eligible videos:**
+3. **Compute cutoff** — `now - RETENTION_DAYS` (default 30, override with `--retention-days=N`)
+4. **Phase 1 — completed videos with a local processed file, past the cutoff:**
    ```sql
-   SELECT id, original_storage_path, processed_storage_path, file_size_bytes, title
+   SELECT id, title, original_storage_path, processed_storage_path,
+          file_size_bytes, processing_completed_at
    FROM videos
    WHERE submagic_status = 'completed'
      AND processed_storage_path IS NOT NULL
      AND processed_storage_path NOT LIKE 'http%'
+     AND processing_completed_at IS NOT NULL
+     AND processing_completed_at <= <cutoff>
    ```
-4. **For each video:**
-   - **Verify** processed file exists: `createSignedUrl(processed_storage_path, 60)` — if fails, **SKIP** and log warning
-   - **Delete** original: `storage.remove([original_storage_path])`
-   - **Log** action with video title and file size
-5. **Print summary:** total files deleted, total bytes reclaimed, any skipped
+   For each: verify the processed file still exists via `createSignedUrl(processed_storage_path, 60)` — if that fails, **skip and warn** rather than delete. Otherwise delete the original.
+5. **Phase 2 — `--include-urls` (opt-in):** same idea, but for videos whose processed path is a URL fallback (`processed_storage_path LIKE 'http%'`), gated by the same `processing_completed_at <= <cutoff>` check. These CDN URLs expire in hours regardless, but the original is still held for the full retention window rather than deleted on sight — same grace period as local-file videos.
+6. **Phase 3 — `--failed` (opt-in):** videos that never produced a result at all. There's no completion date for a failed video, so age is measured from `updated_at` (when it was marked failed) instead of `processing_completed_at`.
+7. **Print summary:** retention window used, files deleted/skipped, bytes reclaimed.
+
+Age is always based on **when the video finished processing (or failed), not when it was uploaded** — a video uploaded a year ago but completed yesterday is not eligible for deletion yet.
 
 ### Usage
 
 ```bash
-# See what would be deleted
+# See what would be deleted (30-day window, local-processed-file videos only)
 node scripts/cleanup-originals.mjs --dry-run
 
-# Execute deletions
+# Preview with URL-fallback videos included too
+node scripts/cleanup-originals.mjs --dry-run --include-urls
+
+# Preview with a different window
+node scripts/cleanup-originals.mjs --dry-run --retention-days=14
+
+# Execute
 node scripts/cleanup-originals.mjs --execute
+node scripts/cleanup-originals.mjs --execute --include-urls
 ```
 
-Default behavior (no flag) = **dry-run** for safety. Must explicitly pass `--execute` to delete.
+Default behavior (no `--execute`) = **dry-run** for safety.
+
+### Scheduling — not yet decided
+
+This script is meant to run on a recurring basis (e.g. daily) once trusted,
+but is **not wired to any scheduler yet**. Options under consideration:
+Netlify scheduled function, n8n, or a plain external cron hitting a small
+trigger endpoint. That decision is separate from the script logic above and
+will be made once the retention-window behavior itself has been validated
+with `--dry-run` against production data.
 
 ---
 
-## Part 4: Impact on Existing `deleteVideo()` — NO CHANGES NEEDED
+## Impact on Existing `deleteVideo()` (library manual delete) — no change
 
-`deleteVideo()` (line 330–369) always tries `storage.remove([original_storage_path])`. After our changes, the original may already be gone. This is fine — Supabase `remove` is idempotent and returns success for non-existent files. The `storageError` warning at line 351–354 is a soft warning that won't break the flow.
+`deleteVideo()` in `src/services/vince/index.ts` always tries
+`storage.remove([original_storage_path])` regardless of whether the
+retention job already deleted it. This is fine — Supabase `remove` is
+idempotent and returns success for non-existent files; the soft warning on
+failure doesn't break the delete flow.
+
+---
+
+## Known Follow-Up (explicitly out of scope here)
+
+`handleReprocess()` in `VincePage.tsx` currently can't reuse a video's
+original — for videos outside the retention window it will already be gone,
+and even inside the window there's no code path that reuses it — so
+re-processing forces a fresh upload. This is a real gap for a future
+trim/re-process feature, but is being addressed separately once that
+feature's design is locked, not as part of this fix.
 
 ---
 
@@ -175,32 +122,19 @@ Default behavior (no flag) = **dry-run** for safety. Must explicitly pass `--exe
 
 | Scenario | What happens | Safe? |
 |----------|-------------|-------|
-| Processed saved to storage → delete original | Original deleted, processed serves downloads | Yes |
-| Processed fell back to URL (CORS failure) | `startsWith('http')` guard prevents deletion | Yes |
+| Processed saved to storage, still within retention window | Original kept | Yes |
+| Processed saved to storage, past retention window | `createSignedUrl` verifies processed file first, then original deleted | Yes |
+| Processed fell back to URL (CORS failure), within retention window | Original kept regardless of `--include-urls` (cutoff not reached) | Yes |
+| Processed fell back to URL, past retention window, `--include-urls` passed | Original deleted (no durable copy exists once it's gone — accepted tradeoff of the URL-fallback path) | Yes, by design |
 | `deleteVideo()` called after original already gone | `remove()` is idempotent, returns success | Yes |
 | Cleanup script: processed file missing from storage | `createSignedUrl` fails → video skipped | Yes |
-| Cleanup script run twice | Second run: files already gone, no-op | Yes |
+| Cleanup script run twice | Second run: already-deleted files are no-ops | Yes |
 | `original_storage_path` DB column after deletion | Path stays (column is NOT NULL), file just gone | Yes |
-
----
-
-## Execution Order
-
-1. Create cleanup script (`scripts/cleanup-originals.mjs`)
-2. Run `--dry-run` to assess scope and verify correctness
-3. Make code changes (`index.ts` + `VincePage.tsx`)
-4. Test locally: upload → process → verify original deleted + download works + library delete works
-5. Deploy code changes
-6. Run cleanup script with `--execute` on production
 
 ---
 
 ## Verification
 
-1. **After code change:** Upload and process a test video. Confirm in Supabase Storage dashboard:
-   - Processed file exists at `{userId}/processed/...`
-   - Original file at `{userId}/...` is gone
-   - Download from library works
-   - Delete from library works (no errors despite missing original)
-2. **After cleanup script dry-run:** Verify listed videos match expectations (completed, with local processed path)
-3. **After cleanup script execute:** Check Supabase Storage dashboard — storage usage should drop significantly
+1. **Code change (deletion removed from completion path):** Upload and process a test video. Confirm in Supabase Storage dashboard that the original is **still present** after captioning completes, alongside the processed file.
+2. **Cleanup script dry-run:** Run `--dry-run` against production data and confirm only videos completed more than 30 days ago are listed.
+3. **Cleanup script execute (once scheduling is decided):** Check Supabase Storage dashboard — storage usage should trend down as the backlog of old originals clears, while recently-completed videos keep their originals.

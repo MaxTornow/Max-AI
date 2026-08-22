@@ -221,9 +221,10 @@ export const deleteOriginalVideo = async (
 };
 
 /**
- * Complete video processing: save processed video, update DB, and clean up original.
- * Only deletes the original if the processed version was saved to Supabase Storage
- * (not a URL fallback from CORS failure).
+ * Complete video processing: save processed video and update DB.
+ * The original video is intentionally kept in storage (not deleted here) so it
+ * remains available for future features (e.g. trim/re-process) and for the
+ * scheduled retention-window cleanup job. See scripts/cleanup-originals.mjs.
  */
 export const completeVideoProcessing = async (
   videoId: string,
@@ -242,11 +243,6 @@ export const completeVideoProcessing = async (
     submagic_download_url: downloadUrl,
     processing_completed_at: new Date().toISOString(),
   });
-
-  // 3. Delete original ONLY if processed was saved to storage (not URL fallback)
-  if (!processedPath.startsWith('http')) {
-    await deleteOriginalVideo(originalStoragePath);
-  }
 
   return processedPath;
 };
