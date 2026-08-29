@@ -3,6 +3,8 @@
  * Vertical INstant Content Editor
  */
 
+import type { TrimPhase } from './trim/types';
+
 /**
  * Submagic processing status values
  * API returns: processing, transcribing, exporting, completed, failed
@@ -145,6 +147,7 @@ export type UploadState =
 /** Processing state for tracking */
 export type ProcessingState =
   | { status: 'idle' }
+  | { status: 'trimming'; phase: TrimPhase; progress: number; message: string }
   | { status: 'creating'; message: string }
   | { status: 'processing'; projectId: string; progress: number }
   | { status: 'downloading'; message: string }

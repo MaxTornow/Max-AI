@@ -1,6 +1,11 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 import type { UploadState, ProcessingState } from '@services/vince/types';
 import { MAX_TITLE_LENGTH } from '@services/vince/types';
+// Type-only import — erased at compile time, so this never pulls the actual
+// ffmpeg.wasm trim module (or its @ffmpeg/* dependencies) into this
+// context's bundle. VinceEditorProvider wraps the whole app (see App.tsx),
+// so anything here loads for every user on every page, not just Vince.
+import type { TrimSegment } from '@services/vince/trim';
 
 /**
  * VinceEditorContext - Persists Vince editor state across in-app navigation
@@ -28,6 +33,10 @@ interface VinceEditorState {
   processingState: ProcessingState;
   currentVideoId: string | null;
   currentProjectId: string | null;
+  // Cut points to remove before upload (Step 4's timeline UI sets this;
+  // null/empty means "process the file as-is", so nothing changes for any
+  // user until that UI exists and actually sets segments).
+  trimSegments: TrimSegment[] | null;
 }
 
 interface VinceEditorContextValue {
@@ -42,6 +51,7 @@ interface VinceEditorContextValue {
   setProcessingState: (stateOrUpdater: ProcessingState | ((prev: ProcessingState) => ProcessingState)) => void;
   setCurrentVideoId: (id: string | null) => void;
   setCurrentProjectId: (id: string | null) => void;
+  setTrimSegments: (segments: TrimSegment[] | null) => void;
   clearEditorState: () => void;
 }
 
@@ -56,6 +66,7 @@ const defaultState: VinceEditorState = {
   processingState: { status: 'idle' },
   currentVideoId: null,
   currentProjectId: null,
+  trimSegments: null,
 };
 
 const VinceEditorContext = createContext<VinceEditorContextValue | undefined>(undefined);
@@ -123,6 +134,10 @@ export const VinceEditorProvider: React.FC<{ children: ReactNode }> = ({ childre
     setEditorState((prev) => ({ ...prev, currentProjectId }));
   }, []);
 
+  const setTrimSegments = useCallback((trimSegments: TrimSegment[] | null) => {
+    setEditorState((prev) => ({ ...prev, trimSegments }));
+  }, []);
+
   const clearEditorState = useCallback(() => {
     setEditorState(defaultState);
   }, []);
@@ -141,6 +156,7 @@ export const VinceEditorProvider: React.FC<{ children: ReactNode }> = ({ childre
         setProcessingState,
         setCurrentVideoId,
         setCurrentProjectId,
+        setTrimSegments,
         clearEditorState,
       }}
     >
