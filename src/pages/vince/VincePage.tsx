@@ -922,6 +922,55 @@ const VincePage: React.FC = () => {
                 />
               </div>
 
+              {/* ============================================================
+                  DEV ONLY — TEMPORARY TEST AFFORDANCE
+                  Not shipped to production (import.meta.env.DEV-gated, and
+                  Vite strips this whole block from prod builds). Exists only
+                  to exercise the full upload -> trim -> captioning handoff
+                  before Step 4's real timeline/cut-marker UI exists. Delete
+                  this block once that UI ships and sets trimSegments itself.
+                  ============================================================ */}
+              {import.meta.env.DEV && (
+                <div className="p-3 rounded-lg border-2 border-dashed border-amber-400 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/20">
+                  <p className="text-xs font-mono font-bold text-amber-800 dark:text-amber-400">
+                    DEV ONLY — temporary trim test panel (not real UI, no ship risk)
+                  </p>
+                  <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
+                    Sets a hardcoded trim before clicking "Process Video" below, to test the real
+                    upload → trim → captioning pipeline end to end. Use a test video at least 15s long.
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2 mt-2">
+                    <button
+                      type="button"
+                      disabled={isProcessing}
+                      onClick={() => setTrimSegments([{ start: 0, end: 5 }])}
+                      className="px-2 py-1 text-xs font-medium rounded border border-amber-400 dark:border-amber-600 text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Single segment: keep first 5s
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isProcessing}
+                      onClick={() => setTrimSegments([{ start: 0, end: 3 }, { start: 8, end: 11 }])}
+                      className="px-2 py-1 text-xs font-medium rounded border border-amber-400 dark:border-amber-600 text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Multi-segment (concat): 0-3s + 8-11s
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isProcessing || !trimSegments}
+                      onClick={() => setTrimSegments(null)}
+                      className="px-2 py-1 text-xs font-medium rounded border border-gray-400 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Clear (process untrimmed)
+                    </button>
+                  </div>
+                  <p className="text-xs font-mono text-amber-700 dark:text-amber-400 mt-2">
+                    active trimSegments: {trimSegments ? JSON.stringify(trimSegments) : 'null (will process untrimmed)'}
+                  </p>
+                </div>
+              )}
+
               {/* Process Button */}
               <button
                 onClick={handleProcessVideo}
