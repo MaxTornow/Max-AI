@@ -3,8 +3,8 @@
 /**
  * Niche Assessment KB Updater
  *
- * Parses a Notion Markdown export (a folder of .md files, or a single .md
- * file) for Nina's niche-assessment knowledge base, chunks by heading
+ * Parses a Notion export (a folder of .md and/or .html files, or a single
+ * such file) for Nina's niche-assessment knowledge base, chunks by heading
  * section, generates OpenAI embeddings, and upserts to the same Supabase
  * `documents` table used by scripts/update-transcripts.mjs.
  *
@@ -17,11 +17,18 @@
  *   node scripts/update-niche-kb.mjs --dry-run path/to/notion-export-folder
  *
  * Input:
- *   A directory (searched recursively) of .md files exported from Notion
- *   (page/workspace "••• > Export > Markdown & CSV", with subpages
- *   included), or a single .md file. Notion's exported filenames/headings
- *   often carry a trailing hex block id (e.g. "Red Flags a1b2c3d4e5f6...")
- *   - that suffix is stripped automatically when deriving titles.
+ *   A directory (searched recursively) of .md and/or .html files exported
+ *   from Notion (page/workspace "••• > Export", with subpages included),
+ *   or a single such file. Both export formats are supported:
+ *     - Markdown & CSV: sectioned by "#"/"##"/... heading lines.
+ *     - HTML: Notion's exported pages often mark sections with a bold
+ *       all-caps paragraph (e.g. "<strong>WHO YOU ARE</strong>") rather
+ *       than real <h1>/<h2> tags - both patterns are treated as section
+ *       headings. Sections are also separated visually by <hr> in the
+ *       export, though the actual boundary is the next heading/label.
+ *   Notion's exported filenames/titles often carry a trailing hex block id
+ *   (e.g. "Red Flags a1b2c3d4e5f6...") - that suffix is stripped
+ *   automatically when deriving titles from filenames.
  *
  * Environment (loaded from .env automatically):
  *   OPENAI_API_KEY            - Required for embedding generation
@@ -53,6 +60,7 @@ const EMBEDDING_DIMS = 1536;
 const BATCH_SIZE = 20;
 const MAX_CHARS_PER_CHUNK = 1500;
 const MIN_CHARS_PER_CHUNK = 200; // sections smaller than this get merged into a neighbor
+const CONTENT_EXTENSIONS = new Set(['.md', '.html']);
 
 // ── Env ─────────────────────────────────────────────────────────────
 function loadDotenv() {
@@ -79,11 +87,11 @@ if (!DRY_RUN) {
 }
 
 // ── Notion export file discovery ───────────────────────────────────
-function findMarkdownFiles(path) {
+function findContentFiles(path) {
   const stat = statSync(path);
   if (stat.isFile()) {
-    if (extname(path).toLowerCase() !== '.md') {
-      throw new Error(`${path} is not a .md file`);
+    if (!CONTENT_EXTENSIONS.has(extname(path).toLowerCase())) {
+      throw new Error(`${path} is not a .md or .html file`);
     }
     return [path];
   }
@@ -93,7 +101,7 @@ function findMarkdownFiles(path) {
       if (entry.name.startsWith('.')) continue;
       const full = join(dir, entry.name);
       if (entry.isDirectory()) walk(full);
-      else if (extname(entry.name).toLowerCase() === '.md') files.push(full);
+      else if (CONTENT_EXTENSIONS.has(extname(entry.name).toLowerCase())) files.push(full);
     }
   };
   walk(path);
@@ -111,8 +119,22 @@ function cleanNotionTitle(str) {
 }
 
 function titleFromFilename(filePath) {
-  return cleanNotionTitle(basename(filePath, '.md'));
+  return cleanNotionTitle(basename(filePath, extname(filePath)));
 }
+
+// Strips a "Page N — " (or similar) prefix and lowercases, so a heading can
+// be compared against the page title to detect "heading just repeats the
+// title" duplication, regardless of exact punctuation/dash character.
+function normalizeForCompare(str) {
+  return str
+    .toLowerCase()
+    .replace(/^page\s*\d+\s*[—–-]\s*/, '')
+    .trim();
+}
+
+// ══════════════════════════════════════════════════════════════════
+// Markdown parsing
+// ══════════════════════════════════════════════════════════════════
 
 // Strip Notion's markdown link syntax down to visible text, and drop the
 // property lines ("Created time: ...") Notion prints under the title.
@@ -125,7 +147,6 @@ function cleanNotionBody(text) {
     .join('\n');
 }
 
-// ── Heading-based sectioning ────────────────────────────────────────
 // Splits a markdown document into sections at each heading line, tracking
 // a breadcrumb path (e.g. "Framework > Red Flags") through nested headings.
 function sectionizeMarkdown(markdown, pageTitle) {
@@ -156,7 +177,144 @@ function sectionizeMarkdown(markdown, pageTitle) {
   return sections;
 }
 
+// ══════════════════════════════════════════════════════════════════
+// HTML parsing (Notion "Export > HTML")
+// ══════════════════════════════════════════════════════════════════
+
+const NAMED_ENTITIES = {
+  amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ',
+};
+
+function decodeEntities(str) {
+  return str.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (whole, ent) => {
+    if (ent[0] === '#') {
+      const code = ent[1].toLowerCase() === 'x' ? parseInt(ent.slice(2), 16) : parseInt(ent.slice(1), 10);
+      return Number.isNaN(code) ? whole : String.fromCodePoint(code);
+    }
+    const key = ent.toLowerCase();
+    return key in NAMED_ENTITIES ? NAMED_ENTITIES[key] : whole;
+  });
+}
+
+// Converts a fragment of inner HTML to plain text: line breaks, dropped
+// link URLs (visible text kept), a space inserted between adjacent inline
+// tags that would otherwise concatenate words, then strips remaining tags.
+function textFromHtml(html) {
+  let s = html;
+  s = s.replace(/<br\s*\/?>/gi, '\n');
+  s = s.replace(/<a\b[^>]*>([\s\S]*?)<\/a>/gi, '$1');
+  s = s.replace(/(<\/(?:strong|em|b|i|mark|code)>)(<(?:strong|em|b|i|mark|code)\b)/gi, '$1 $2');
+  s = s.replace(/<[^>]+>/g, '');
+  return decodeEntities(s);
+}
+
+function extractPageTitle(html) {
+  const m = html.match(/<h1 class="page-title"[^>]*>([\s\S]*?)<\/h1>/);
+  return m ? textFromHtml(m[1]).trim() : null;
+}
+
+function extractPageBody(html) {
+  const m = html.match(/<div class="page-body">([\s\S]*)<\/div><\/article>/);
+  return m ? m[1] : '';
+}
+
+// Tokenizes the page body into top-level blocks (paragraph, heading, list,
+// blockquote, or a bare <hr> separator). Notion's exported markup doesn't
+// nest these at the top level, so a single non-greedy regex pass suffices.
+function tokenizeBlocks(html) {
+  const blockRe = /<hr\b[^>]*\/>|<(h[1-6]|p|ul|ol|blockquote)\b[^>]*>([\s\S]*?)<\/\1>/g;
+  const blocks = [];
+  let m;
+  while ((m = blockRe.exec(html))) {
+    if (m[0].startsWith('<hr')) blocks.push({ type: 'hr' });
+    else blocks.push({ type: m[1], inner: m[2] });
+  }
+  return blocks;
+}
+
+function listToText(inner, ordered) {
+  const liRe = /<li\b[^>]*>([\s\S]*?)<\/li>/g;
+  const items = [];
+  let m;
+  while ((m = liRe.exec(inner))) items.push(textFromHtml(m[1]).trim());
+  return items.map((t, i) => (ordered ? `${i + 1}. ${t}` : `- ${t}`)).join('\n');
+}
+
+// Splits an HTML page body into sections. Notion pages in this export don't
+// use real <h2>/<h3> blocks for internal structure - they mark a section
+// with a paragraph that is ENTIRELY bold (e.g. "<strong>WHO YOU ARE</strong>")
+// with nothing else in it. Real heading tags are honored too, if present.
+// The page's own title, when it appears again as the first such label
+// (Notion often repeats the title as a bold lead line), is treated as part
+// of the intro rather than a redundant subsection.
+function htmlToSections(html, pageTitle) {
+  const blocks = tokenizeBlocks(html);
+  const sections = [];
+  let current = { path: [pageTitle], heading: pageTitle, level: 0, text: '' };
+  let sawFirstContent = false;
+
+  const pushCurrent = () => {
+    if (current.text.trim()) sections.push({ ...current, text: current.text.trim() });
+  };
+  const startSection = (heading) => {
+    pushCurrent();
+    current = { path: [pageTitle, heading], heading, level: 1, text: '' };
+  };
+  const appendText = (text) => {
+    if (text) current.text += (current.text ? '\n\n' : '') + text;
+  };
+  // A heading that merely restates the page title (Notion often repeats it
+  // as the first bold line) shouldn't become its own redundant subsection -
+  // only skip the FIRST such occurrence, so a later repeat still sections.
+  const isRedundantTitleHeading = (heading) =>
+    !sawFirstContent && normalizeForCompare(heading) === normalizeForCompare(pageTitle);
+
+  for (const block of blocks) {
+    if (block.type === 'hr') continue; // visual separator only; real boundary is the next heading/label
+
+    if (/^h[1-6]$/.test(block.type)) {
+      const heading = textFromHtml(block.inner).trim();
+      if (isRedundantTitleHeading(heading)) { sawFirstContent = true; continue; }
+      sawFirstContent = true;
+      startSection(heading);
+      continue;
+    }
+
+    if (block.type === 'p') {
+      const trimmedInner = block.inner.trim();
+      const strongOnly = trimmedInner.match(/^<strong>([\s\S]*)<\/strong>$/);
+      if (strongOnly) {
+        const heading = textFromHtml(strongOnly[1]).trim();
+        if (isRedundantTitleHeading(heading)) { sawFirstContent = true; continue; }
+        sawFirstContent = true;
+        startSection(heading);
+        continue;
+      }
+      sawFirstContent = true;
+      appendText(textFromHtml(block.inner).trim());
+      continue;
+    }
+
+    if (block.type === 'ul' || block.type === 'ol') {
+      sawFirstContent = true;
+      appendText(listToText(block.inner, block.type === 'ol'));
+      continue;
+    }
+
+    if (block.type === 'blockquote') {
+      sawFirstContent = true;
+      const text = textFromHtml(block.inner).trim();
+      if (text) appendText(text.split('\n').map(l => `> ${l}`).join('\n'));
+      continue;
+    }
+  }
+  pushCurrent();
+  return sections;
+}
+
 // ── Chunker: splits oversized sections by paragraph, merges tiny ones ──
+// Shared by both the markdown and HTML pipelines - both produce the same
+// { path, heading, level, text } section shape.
 function chunkSections(sections) {
   const chunks = [];
 
@@ -225,23 +383,30 @@ async function main() {
   console.log(`Mode:       ${DRY_RUN ? 'DRY RUN' : 'LIVE'}\n`);
 
   const resolvedInput = resolve(INPUT_PATH);
-  const files = findMarkdownFiles(resolvedInput);
-  if (files.length === 0) throw new Error(`No .md files found under ${INPUT_PATH}`);
-  console.log(`Found ${files.length} markdown file(s)\n`);
+  const files = findContentFiles(resolvedInput);
+  if (files.length === 0) throw new Error(`No .md or .html files found under ${INPUT_PATH}`);
+  console.log(`Found ${files.length} file(s)\n`);
 
   const allChunks = [];
   for (const file of files) {
+    const ext = extname(file).toLowerCase();
     const raw = readFileSync(file, 'utf-8');
-    const cleaned = cleanNotionBody(raw);
+    let pageTitle, sections;
 
-    // Prefer an explicit "# Title" first line; fall back to the filename.
-    // If found, drop that line before sectioning so it isn't also counted
-    // as a level-1 subsection duplicating the page title.
-    const firstHeadingMatch = cleaned.match(/^#\s+(.*)$/m);
-    const pageTitle = firstHeadingMatch ? cleanNotionTitle(firstHeadingMatch[1]) : titleFromFilename(file);
-    const body = firstHeadingMatch ? cleaned.replace(firstHeadingMatch[0], '') : cleaned;
+    if (ext === '.html') {
+      pageTitle = extractPageTitle(raw) || titleFromFilename(file);
+      sections = htmlToSections(extractPageBody(raw), pageTitle);
+    } else {
+      const cleaned = cleanNotionBody(raw);
+      // Prefer an explicit "# Title" first line; fall back to the filename.
+      // If found, drop that line before sectioning so it isn't also counted
+      // as a level-1 subsection duplicating the page title.
+      const firstHeadingMatch = cleaned.match(/^#\s+(.*)$/m);
+      pageTitle = firstHeadingMatch ? cleanNotionTitle(firstHeadingMatch[1]) : titleFromFilename(file);
+      const body = firstHeadingMatch ? cleaned.replace(firstHeadingMatch[0], '') : cleaned;
+      sections = sectionizeMarkdown(body, pageTitle);
+    }
 
-    const sections = sectionizeMarkdown(body, pageTitle);
     const sectionChunks = chunkSections(sections);
 
     sectionChunks.forEach((chunk, ci) => {
