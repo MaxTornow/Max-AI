@@ -22,6 +22,14 @@ const ProcessingProgress: React.FC<ProcessingProgressProps> = ({
 
   const getStatusInfo = () => {
     switch (state.status) {
+      case 'trimming':
+        return {
+          icon: <FiLoader className="w-6 h-6 text-blue-500 animate-spin" />,
+          title: 'Trimming video...',
+          message: state.message,
+          color: 'blue',
+          progress: state.progress,
+        };
       case 'creating':
         return {
           icon: <FiLoader className="w-6 h-6 text-blue-500 animate-spin" />,
@@ -92,11 +100,11 @@ const ProcessingProgress: React.FC<ProcessingProgressProps> = ({
             {info.message}
           </p>
 
-          {/* Progress bar for processing */}
-          {state.status === 'processing' && (
+          {/* Progress bar for trimming/processing */}
+          {(state.status === 'trimming' || state.status === 'processing') && (
             <div className="mt-3">
               <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
-                <span>Processing</span>
+                <span>{state.status === 'trimming' ? 'Trimming' : 'Processing'}</span>
                 <span>{state.progress}%</span>
               </div>
               <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
