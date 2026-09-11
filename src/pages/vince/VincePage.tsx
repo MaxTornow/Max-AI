@@ -114,6 +114,17 @@ const VincePage: React.FC = () => {
   // Tab state
   const [activeTab, setActiveTab] = useState<VinceTab>('editor');
 
+  // DEV ONLY — mirrors the selected file onto window for console testing.
+  // react-dropzone manages the file internally and only surfaces it via
+  // this component's state, so the underlying <input type="file">'s .files
+  // isn't reliably queryable from the console after selection. Temporary,
+  // same lifecycle as the dev trim test panel below — remove alongside it.
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      (window as any).__currentSelectedFile = selectedFile;
+    }
+  }, [selectedFile]);
+
   // Load saved settings once on mount
   const savedSettings = loadSavedSettings();
   const initialTemplate = getInitialTemplate();
