@@ -6,6 +6,7 @@ interface ProcessingProgressProps {
   state: ProcessingState;
   onRetry?: () => void;
   onViewLibrary?: () => void;
+  onCancelTrim?: () => void;
 }
 
 /**
@@ -15,6 +16,7 @@ const ProcessingProgress: React.FC<ProcessingProgressProps> = ({
   state,
   onRetry,
   onViewLibrary,
+  onCancelTrim,
 }) => {
   if (state.status === 'idle') {
     return null;
@@ -134,6 +136,16 @@ const ProcessingProgress: React.FC<ProcessingProgressProps> = ({
               >
                 <FiRefreshCw className="w-4 h-4" />
                 Retry
+              </button>
+            )}
+
+            {state.status === 'trimming' && onCancelTrim && (
+              <button
+                onClick={onCancelTrim}
+                className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              >
+                <FiX className="w-4 h-4" />
+                Cancel
               </button>
             )}
           </div>
