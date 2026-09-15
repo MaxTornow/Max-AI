@@ -22,7 +22,7 @@
  */
 
 import { trimFfmpegClient, classifyError } from './ffmpegClient';
-import { TrimError } from './types';
+import { TrimError, assertFileSizeWithinTrimLimit } from './types';
 
 const INPUT_NAME = 'keyframe-scan-input';
 
@@ -39,6 +39,8 @@ const IS_KEY_RE = /iskey:1/;
  * interactive UI (dragging a cut handle), NOT re-scanned per interaction.
  */
 export async function getKeyframeTimestamps(file: File): Promise<number[]> {
+  assertFileSizeWithinTrimLimit(file);
+
   await trimFfmpegClient.load();
 
   const inputExt = file.name.split('.').pop() || 'mp4';

@@ -11,5 +11,5 @@
 export { getKeyframeTimestamps } from './keyframes';
 export { snapToNearestKeyframe } from './snapToNearestKeyframe';
 export { trimVideo } from './trimVideo';
-export { TrimError } from './types';
+export { TrimError, MAX_TRIM_FILE_SIZE_BYTES, assertFileSizeWithinTrimLimit } from './types';
 export type { TrimSegment, TrimProgress, TrimPhase, TrimErrorReason } from './types';

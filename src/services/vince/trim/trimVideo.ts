@@ -15,7 +15,7 @@
 import { trimFfmpegClient, classifyError } from './ffmpegClient';
 import { getKeyframeTimestamps } from './keyframes';
 import { snapToNearestKeyframe } from './snapToNearestKeyframe';
-import { TrimError, type TrimProgress, type TrimSegment } from './types';
+import { TrimError, assertFileSizeWithinTrimLimit, type TrimProgress, type TrimSegment } from './types';
 
 function checkAborted(signal?: AbortSignal): void {
   if (signal?.aborted) {
@@ -48,6 +48,7 @@ export async function trimVideo(
   if (keepSegments.length === 0) {
     throw new TrimError('unknown', 'No segments to keep were provided.');
   }
+  assertFileSizeWithinTrimLimit(file);
 
   await trimFfmpegClient.requestWakeLock();
 
