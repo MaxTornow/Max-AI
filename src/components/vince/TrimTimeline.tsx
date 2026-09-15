@@ -226,20 +226,33 @@ const TrimTimeline: React.FC<TrimTimelineProps> = ({ file, onTrimSegmentsChange,
   // requestPreviewSeek()'s throttling: that throttle exists for
   // pointermove's much higher event rate, not relevant to the
   // once-per-boundary jumps here.
-  const pauseEditPreview = useCallback(() => {
-    if (isPlayingEdit) {
-      videoRef.current?.pause();
-      setIsPlayingEdit(false);
+  //
+  // The video stays muted outside of this playback mode (the drag-preview
+  // above is a rapid series of paused-frame seeks, not something anyone
+  // wants to hear) and is explicitly unmuted only while actually playing
+  // an edit preview — set/unset imperatively via the ref rather than a
+  // reactive `muted` prop, matching how currentTime is already handled
+  // everywhere else in this file. All "stop" paths funnel through
+  // stopEditPreview() so muting back on can't be missed from any of them.
+  const stopEditPreview = useCallback(() => {
+    const video = videoRef.current;
+    if (video) {
+      video.pause();
+      video.muted = true;
     }
-  }, [isPlayingEdit]);
+    setIsPlayingEdit(false);
+  }, []);
+
+  const pauseEditPreview = useCallback(() => {
+    if (isPlayingEdit) stopEditPreview();
+  }, [isPlayingEdit, stopEditPreview]);
 
   const handleTogglePlayEdit = () => {
     const video = videoRef.current;
     if (!video || duration == null || disabled) return;
 
     if (isPlayingEdit) {
-      video.pause();
-      setIsPlayingEdit(false);
+      stopEditPreview();
       return;
     }
 
@@ -247,6 +260,11 @@ const TrimTimeline: React.FC<TrimTimelineProps> = ({ file, onTrimSegmentsChange,
     activeSegmentsRef.current = segments;
     activeSegmentIndexRef.current = 0;
     video.currentTime = segments[0].start;
+    // Safe to unmute here specifically because this runs synchronously
+    // inside a real click handler — browsers require exactly that (a
+    // direct user gesture) to allow unmuted playback triggered from JS;
+    // an unmute+play() from, say, a useEffect on mount would be blocked.
+    video.muted = false;
     video.play();
     setIsPlayingEdit(true);
   };
@@ -274,25 +292,27 @@ const TrimTimeline: React.FC<TrimTimelineProps> = ({ file, onTrimSegmentsChange,
           activeSegmentIndexRef.current = nextIndex;
           video.currentTime = nextSeg.start;
         } else {
-          video.pause();
-          setIsPlayingEdit(false);
+          stopEditPreview();
         }
       }
     };
 
     video.addEventListener('timeupdate', handleTimeUpdate);
     return () => video.removeEventListener('timeupdate', handleTimeUpdate);
-  }, [isPlayingEdit]);
+  }, [isPlayingEdit, stopEditPreview]);
 
-  // Keeps isPlayingEdit correct if the video pauses for any reason this
-  // component didn't itself initiate (a hardware media key, iOS Control
-  // Center, a tab going to the background) — safe to also fire on the
-  // pause() calls made above, since setting the same false value twice
-  // is a no-op.
+  // Keeps isPlayingEdit (and muted) correct if the video pauses for any
+  // reason this component didn't itself initiate (a hardware media key,
+  // iOS Control Center, a tab going to the background) — safe to also
+  // fire on the pause() calls made above, since re-applying the same
+  // state is a no-op.
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
-    const handleNativePause = () => setIsPlayingEdit(false);
+    const handleNativePause = () => {
+      video.muted = true;
+      setIsPlayingEdit(false);
+    };
     video.addEventListener('pause', handleNativePause);
     return () => video.removeEventListener('pause', handleNativePause);
   }, [videoUrl]);
