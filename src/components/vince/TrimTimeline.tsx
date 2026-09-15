@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { FiScissors, FiPlus, FiX, FiAlertCircle, FiInfo, FiLoader } from 'react-icons/fi';
+import { FiScissors, FiPlus, FiX, FiAlertCircle, FiInfo, FiLoader, FiPlay, FiPause } from 'react-icons/fi';
 import type { TrimSegment } from '@services/vince/trim';
 // Imported directly from their own files, NOT the '@services/vince/trim'
 // barrel — the barrel's index.ts unconditionally re-exports
@@ -140,6 +140,12 @@ const TrimTimeline: React.FC<TrimTimelineProps> = ({ file, onTrimSegmentsChange,
   const [draggingCutId, setDraggingCutId] = useState<string | null>(null);
   const [draggingHandle, setDraggingHandle] = useState<'start' | 'end' | null>(null);
   const [dragRawTime, setDragRawTime] = useState<number | null>(null);
+  const [isPlayingEdit, setIsPlayingEdit] = useState(false);
+  // Snapshotted once when playback starts (not recomputed per tick) — cuts
+  // can't change while playback is active (see pauseEditPreview() below),
+  // so this is a stable source of truth for the whole playback session.
+  const activeSegmentsRef = useRef<TrimSegment[]>([]);
+  const activeSegmentIndexRef = useRef(0);
 
   const sizeError = (() => {
     try {
@@ -212,6 +218,85 @@ const TrimTimeline: React.FC<TrimTimelineProps> = ({ file, onTrimSegmentsChange,
     video.currentTime = time;
   }, []);
 
+  // "Preview the edit": plays only the KEPT segments in order, jumping
+  // past each cut the moment it's reached, on the original file — no
+  // ffmpeg involved, same reasoning as the live drag-preview above (native
+  // <video> playback is separate from ffmpeg.wasm's WASM heap). Segment
+  // jumps use direct currentTime assignment rather than
+  // requestPreviewSeek()'s throttling: that throttle exists for
+  // pointermove's much higher event rate, not relevant to the
+  // once-per-boundary jumps here.
+  const pauseEditPreview = useCallback(() => {
+    if (isPlayingEdit) {
+      videoRef.current?.pause();
+      setIsPlayingEdit(false);
+    }
+  }, [isPlayingEdit]);
+
+  const handleTogglePlayEdit = () => {
+    const video = videoRef.current;
+    if (!video || duration == null || disabled) return;
+
+    if (isPlayingEdit) {
+      video.pause();
+      setIsPlayingEdit(false);
+      return;
+    }
+
+    const segments = cutsToKeepSegments(cutsRef.current, duration) ?? [{ start: 0, end: duration }];
+    activeSegmentsRef.current = segments;
+    activeSegmentIndexRef.current = 0;
+    video.currentTime = segments[0].start;
+    video.play();
+    setIsPlayingEdit(true);
+  };
+
+  // Walks the snapshotted segment list forward as playback advances,
+  // jumping to the next kept segment's start the moment the current one
+  // ends, and pausing once the last one is exhausted (no auto-loop).
+  // Tracking by segment index (rather than "is currentTime inside any
+  // segment right now") stays correct even for short or closely-spaced
+  // segments, and uniformly corrects a manual scrub into a cut region the
+  // same way it corrects reaching one by natural playback.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !isPlayingEdit) return;
+
+    const handleTimeUpdate = () => {
+      const segments = activeSegmentsRef.current;
+      const seg = segments[activeSegmentIndexRef.current];
+      if (!seg) return;
+
+      if (video.currentTime >= seg.end) {
+        const nextIndex = activeSegmentIndexRef.current + 1;
+        const nextSeg = segments[nextIndex];
+        if (nextSeg) {
+          activeSegmentIndexRef.current = nextIndex;
+          video.currentTime = nextSeg.start;
+        } else {
+          video.pause();
+          setIsPlayingEdit(false);
+        }
+      }
+    };
+
+    video.addEventListener('timeupdate', handleTimeUpdate);
+    return () => video.removeEventListener('timeupdate', handleTimeUpdate);
+  }, [isPlayingEdit]);
+
+  // Keeps isPlayingEdit correct if the video pauses for any reason this
+  // component didn't itself initiate (a hardware media key, iOS Control
+  // Center, a tab going to the background) — safe to also fire on the
+  // pause() calls made above, since setting the same false value twice
+  // is a no-op.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const handleNativePause = () => setIsPlayingEdit(false);
+    video.addEventListener('pause', handleNativePause);
+    return () => video.removeEventListener('pause', handleNativePause);
+  }, [videoUrl]);
+
   // Detect keyframes once per file. Not blocking — dragging still works
   // with raw (unsnapped) positions if this is slow or fails; it only
   // enhances the drag once it resolves. Matches getKeyframeTimestamps()'s
@@ -243,7 +328,15 @@ const TrimTimeline: React.FC<TrimTimelineProps> = ({ file, onTrimSegmentsChange,
   useEffect(() => {
     setDuration(null);
     setCuts([]);
+    setIsPlayingEdit(false);
   }, [file]);
+
+  // If the whole panel becomes disabled (e.g. processing starts) while an
+  // edit preview is running, stop it rather than leaving it playing behind
+  // a now-inert UI.
+  useEffect(() => {
+    if (disabled) pauseEditPreview();
+  }, [disabled, pauseEditPreview]);
 
   const emitSegments = useCallback(
     (nextCuts: Cut[], currentDuration: number) => {
@@ -267,6 +360,7 @@ const TrimTimeline: React.FC<TrimTimelineProps> = ({ file, onTrimSegmentsChange,
 
   const handleAddCut = () => {
     if (duration == null || !usableGap) return;
+    pauseEditPreview();
     const cutLength = Math.min(2, usableGap.usableLength);
     const start = clamp(
       (usableGap.usableStart + usableGap.usableEnd) / 2 - cutLength / 2,
@@ -283,6 +377,7 @@ const TrimTimeline: React.FC<TrimTimelineProps> = ({ file, onTrimSegmentsChange,
   };
 
   const handleRemoveCut = (id: string) => {
+    pauseEditPreview();
     setCuts((prev) => {
       const next = prev.filter((c) => c.id !== id);
       if (duration != null) emitSegments(next, duration);
@@ -292,6 +387,7 @@ const TrimTimeline: React.FC<TrimTimelineProps> = ({ file, onTrimSegmentsChange,
 
   const handlePointerDown = (cutId: string, handle: 'start' | 'end') => (e: React.PointerEvent) => {
     if (disabled) return;
+    pauseEditPreview();
     e.preventDefault();
     e.stopPropagation();
     (e.target as Element).setPointerCapture(e.pointerId);
@@ -437,6 +533,37 @@ const TrimTimeline: React.FC<TrimTimelineProps> = ({ file, onTrimSegmentsChange,
             playsInline
             muted
           />
+
+          {duration != null && (
+            <>
+              {isPlayingEdit && (
+                <div className="absolute top-2 left-2 px-2 py-0.5 rounded bg-black/60 text-white text-xs font-medium">
+                  Previewing edit
+                </div>
+              )}
+
+              {/* Full-cover click target, like a standard video player's
+                  play/pause overlay. No native `controls` here on purpose
+                  — its scrub bar would span the ORIGINAL video's full
+                  duration, which wouldn't correspond to position in the
+                  edited result this button is meant to preview. */}
+              <button
+                type="button"
+                onClick={handleTogglePlayEdit}
+                disabled={disabled}
+                aria-label={isPlayingEdit ? 'Pause preview' : 'Preview the edit'}
+                className={`absolute inset-0 flex items-center justify-center group ${disabled ? 'pointer-events-none' : ''}`}
+              >
+                <span className="flex items-center justify-center w-12 h-12 rounded-full bg-black/50 group-hover:bg-black/70 text-white transition-colors">
+                  {isPlayingEdit ? (
+                    <FiPause className="w-6 h-6" />
+                  ) : (
+                    <FiPlay className="w-6 h-6 ml-0.5" />
+                  )}
+                </span>
+              </button>
+            </>
+          )}
         </div>
       )}
 
