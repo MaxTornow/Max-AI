@@ -45,16 +45,22 @@ export class TrimError extends Error {
 /**
  * Maximum file size this module will attempt to process, in bytes.
  *
- * PROVISIONAL (set 2026-09-15) — based on a confirmed, twice-reproduced
- * crash on a real iPhone in Safari at ~1.5GB (1,566,946,479 bytes, HEVC
- * .MOV): getKeyframeTimestamps() silently killed the tab (full page
- * reload, no catchable JS error — Safari exposes no memory-pressure API
- * to detect this ahead of time, so there is no way to warn and recover
- * mid-operation, only to refuse upfront). This value is ~3x margin below
- * that one confirmed failure; it has NOT yet been validated against a
- * confirmed-*working* real-device data point at any size. Update this
- * once real-device testing confirms (or revises) a safe cap — see the PR
- * discussion around this commit for the full reasoning.
+ * CONFIRMED (2026-09-15) via real-device testing on an iPhone in Safari,
+ * HEVC .MOV files:
+ *   - ~400MB: getKeyframeTimestamps() and trimVideo() both completed
+ *     successfully end-to-end (full pipeline, clean output file).
+ *   - ~568MB: correctly rejected by this guard before any processing
+ *     began (working as intended — over the 500MB cap).
+ *   - ~1.5GB (1,566,946,479 bytes): reproduced twice, silently killed the
+ *     tab (full page reload, no catchable JS error — Safari exposes no
+ *     memory-pressure API to detect this ahead of time, so there is no
+ *     way to warn and recover mid-operation, only to refuse upfront).
+ * The range between ~500MB and ~1.5GB was deliberately not bisected
+ * further — chasing an exact crash boundary wouldn't generalize across
+ * devices/content anyway. 500MB was kept as the v1 cap, giving real
+ * margin below the confirmed-safe point and well below the confirmed
+ * failure. See the PR discussion around this commit for the full
+ * reasoning.
  */
 export const MAX_TRIM_FILE_SIZE_BYTES = 500 * 1024 * 1024; // 500MB
 
