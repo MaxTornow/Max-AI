@@ -141,6 +141,10 @@ const TrimTimeline: React.FC<TrimTimelineProps> = ({ file, onTrimSegmentsChange,
   const [draggingHandle, setDraggingHandle] = useState<'start' | 'end' | null>(null);
   const [dragRawTime, setDragRawTime] = useState<number | null>(null);
   const [isPlayingEdit, setIsPlayingEdit] = useState(false);
+  // Playhead position on the track during "Play edit" playback — null
+  // whenever not playing, so the marker only ever renders during that
+  // mode (a drag's own handle position already serves as its indicator).
+  const [playheadTime, setPlayheadTime] = useState<number | null>(null);
   // Snapshotted once when playback starts (not recomputed per tick) — cuts
   // can't change while playback is active (see pauseEditPreview() below),
   // so this is a stable source of truth for the whole playback session.
@@ -241,6 +245,7 @@ const TrimTimeline: React.FC<TrimTimelineProps> = ({ file, onTrimSegmentsChange,
       video.muted = true;
     }
     setIsPlayingEdit(false);
+    setPlayheadTime(null);
   }, []);
 
   const pauseEditPreview = useCallback(() => {
@@ -260,6 +265,7 @@ const TrimTimeline: React.FC<TrimTimelineProps> = ({ file, onTrimSegmentsChange,
     activeSegmentsRef.current = segments;
     activeSegmentIndexRef.current = 0;
     video.currentTime = segments[0].start;
+    setPlayheadTime(segments[0].start);
     // Safe to unmute here specifically because this runs synchronously
     // inside a real click handler — browsers require exactly that (a
     // direct user gesture) to allow unmuted playback triggered from JS;
@@ -276,6 +282,17 @@ const TrimTimeline: React.FC<TrimTimelineProps> = ({ file, onTrimSegmentsChange,
   // segment right now") stays correct even for short or closely-spaced
   // segments, and uniformly corrects a manual scrub into a cut region the
   // same way it corrects reaching one by natural playback.
+  //
+  // The track playhead is driven from this SAME handler (not a second
+  // listener) specifically so it can't drift from the jump logic: on a
+  // normal tick it's set to the current, still-within-segment time; on a
+  // jump it's set straight to the next segment's start in the same tick,
+  // so it never renders at a position inside a cut — no in-between frame
+  // exists where that could happen. No CSS transition on its position
+  // either, on purpose: timeupdate's own coarse firing rate already makes
+  // normal playback advance in small discrete hops, and smoothing that
+  // over would also smooth over the cut-jump into looking like it played
+  // through the cut, which it didn't.
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !isPlayingEdit) return;
@@ -291,9 +308,12 @@ const TrimTimeline: React.FC<TrimTimelineProps> = ({ file, onTrimSegmentsChange,
         if (nextSeg) {
           activeSegmentIndexRef.current = nextIndex;
           video.currentTime = nextSeg.start;
+          setPlayheadTime(nextSeg.start);
         } else {
           stopEditPreview();
         }
+      } else {
+        setPlayheadTime(video.currentTime);
       }
     };
 
@@ -703,6 +723,21 @@ const TrimTimeline: React.FC<TrimTimelineProps> = ({ file, onTrimSegmentsChange,
                 </React.Fragment>
               );
             })}
+
+            {/* "Play edit" playhead — only ever rendered during that
+                playback mode (a drag's own handle position already serves
+                as its indicator, so this would just duplicate it there).
+                Deliberately no CSS transition: see the handleTimeUpdate
+                effect above for why a smoothed position would misrepresent
+                the discrete jump across a cut. Rendered last so it's
+                topmost, though in practice it can never coincide with an
+                active drag — starting one calls pauseEditPreview() first. */}
+            {playheadTime != null && (
+              <div
+                className="absolute top-0 h-full w-0.5 bg-gray-900 dark:bg-white pointer-events-none"
+                style={{ left: `${(playheadTime / duration) * 100}%` }}
+              />
+            )}
           </div>
 
           <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
