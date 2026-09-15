@@ -123,9 +123,20 @@ const TrimTimeline: React.FC<TrimTimelineProps> = ({ file, onTrimSegmentsChange,
 
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [duration, setDuration] = useState<number | null>(null);
+  const [videoDimensions, setVideoDimensions] = useState<{ width: number; height: number } | null>(null);
   const [keyframes, setKeyframes] = useState<number[] | null>(null);
   const [keyframesError, setKeyframesError] = useState<string | null>(null);
   const [cuts, setCuts] = useState<Cut[]>([]);
+  // Mirrors `cuts` for synchronous reads inside the drag handler below —
+  // React doesn't guarantee a setCuts() functional-updater callback runs
+  // synchronously within the same call, which made an earlier version of
+  // this effect's preview-seek trigger silently never fire (previewTime
+  // stayed null past the setCuts() call). Computing from this ref instead
+  // of an updater removes that dependency on React's internal timing.
+  const cutsRef = useRef<Cut[]>([]);
+  useEffect(() => {
+    cutsRef.current = cuts;
+  }, [cuts]);
   const [draggingCutId, setDraggingCutId] = useState<string | null>(null);
   const [draggingHandle, setDraggingHandle] = useState<'start' | 'end' | null>(null);
   const [dragRawTime, setDragRawTime] = useState<number | null>(null);
@@ -151,10 +162,55 @@ const TrimTimeline: React.FC<TrimTimelineProps> = ({ file, onTrimSegmentsChange,
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
-    const handleLoadedMetadata = () => setDuration(video.duration);
+    const handleLoadedMetadata = () => {
+      setDuration(video.duration);
+      setVideoDimensions({ width: video.videoWidth, height: video.videoHeight });
+    };
     video.addEventListener('loadedmetadata', handleLoadedMetadata);
     return () => video.removeEventListener('loadedmetadata', handleLoadedMetadata);
   }, [videoUrl]);
+
+  // Live preview: seeks the same <video> element used for duration to
+  // whichever handle is actively being dragged, so the user sees the exact
+  // frame at that cut point instead of dragging blind. Native <video>
+  // seeking runs on the browser's own media pipeline, entirely separate
+  // from ffmpeg.wasm's WASM heap — this adds no memory pressure to the
+  // pipeline that's already the constrained resource here (see
+  // MAX_TRIM_FILE_SIZE_BYTES's history in types.ts).
+  //
+  // pointermove fires far faster than a seek can complete, so seeks are
+  // throttled by the video's own 'seeked' event rather than fired on every
+  // event: only one seek is ever in flight, and a newer target overwrites
+  // any pending one rather than queuing behind it.
+  const seekInFlightRef = useRef(false);
+  const pendingSeekTimeRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const handleSeeked = () => {
+      if (pendingSeekTimeRef.current != null) {
+        const next = pendingSeekTimeRef.current;
+        pendingSeekTimeRef.current = null;
+        video.currentTime = next;
+      } else {
+        seekInFlightRef.current = false;
+      }
+    };
+    video.addEventListener('seeked', handleSeeked);
+    return () => video.removeEventListener('seeked', handleSeeked);
+  }, [videoUrl]);
+
+  const requestPreviewSeek = useCallback((time: number) => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (seekInFlightRef.current) {
+      pendingSeekTimeRef.current = time;
+      return;
+    }
+    seekInFlightRef.current = true;
+    video.currentTime = time;
+  }, []);
 
   // Detect keyframes once per file. Not blocking — dragging still works
   // with raw (unsnapped) positions if this is slow or fails; it only
@@ -252,49 +308,52 @@ const TrimTimeline: React.FC<TrimTimelineProps> = ({ file, onTrimSegmentsChange,
     const onMove = (e: PointerEvent) => {
       const raw = timeFromClientX(e.clientX);
 
-      setCuts((prevCuts) => {
-        const sorted = [...prevCuts].sort((a, b) => a.start - b.start);
-        const idx = sorted.findIndex((c) => c.id === draggingCutId);
-        if (idx === -1) return prevCuts;
+      // Computed synchronously from cutsRef, NOT from a setCuts() updater
+      // callback — React doesn't guarantee that callback runs synchronously
+      // within this call, which is exactly what made an earlier version of
+      // this seek trigger silently never fire.
+      const sorted = [...cutsRef.current].sort((a, b) => a.start - b.start);
+      const idx = sorted.findIndex((c) => c.id === draggingCutId);
+      if (idx === -1) return;
 
-        const current = sorted[idx];
-        const prevNeighbor = sorted[idx - 1];
-        const nextNeighbor = sorted[idx + 1];
+      const current = sorted[idx];
+      const prevNeighbor = sorted[idx - 1];
+      const nextNeighbor = sorted[idx + 1];
 
-        let updated: Cut;
-        if (draggingHandle === 'start') {
-          const lower = prevNeighbor ? prevNeighbor.end + MIN_SEGMENT_SECONDS : 0;
-          const upper = current.end - MIN_SEGMENT_SECONDS;
-          const clampedRaw = clamp(raw, lower, upper);
-          const snapped = keyframes ? snapToNearestKeyframe(clampedRaw, keyframes) : clampedRaw;
-          const finalStart = clamp(snapped, lower, upper);
-          setDragRawTime(clampedRaw);
-          updated = { ...current, start: finalStart };
-        } else {
-          const lower = current.start + MIN_SEGMENT_SECONDS;
-          const upper = nextNeighbor ? nextNeighbor.start - MIN_SEGMENT_SECONDS : duration;
-          const clampedRaw = clamp(raw, lower, upper);
-          const snapped = keyframes ? snapToNearestKeyframe(clampedRaw, keyframes) : clampedRaw;
-          const finalEnd = clamp(snapped, lower, upper);
-          setDragRawTime(clampedRaw);
-          updated = { ...current, end: finalEnd };
-        }
+      let updated: Cut;
+      let previewTime: number;
+      if (draggingHandle === 'start') {
+        const lower = prevNeighbor ? prevNeighbor.end + MIN_SEGMENT_SECONDS : 0;
+        const upper = current.end - MIN_SEGMENT_SECONDS;
+        const clampedRaw = clamp(raw, lower, upper);
+        const snapped = keyframes ? snapToNearestKeyframe(clampedRaw, keyframes) : clampedRaw;
+        const finalStart = clamp(snapped, lower, upper);
+        setDragRawTime(clampedRaw);
+        previewTime = finalStart;
+        updated = { ...current, start: finalStart };
+      } else {
+        const lower = current.start + MIN_SEGMENT_SECONDS;
+        const upper = nextNeighbor ? nextNeighbor.start - MIN_SEGMENT_SECONDS : duration;
+        const clampedRaw = clamp(raw, lower, upper);
+        const snapped = keyframes ? snapToNearestKeyframe(clampedRaw, keyframes) : clampedRaw;
+        const finalEnd = clamp(snapped, lower, upper);
+        setDragRawTime(clampedRaw);
+        previewTime = finalEnd;
+        updated = { ...current, end: finalEnd };
+      }
 
-        const next = [...sorted];
-        next[idx] = updated;
-        return next; // stays sorted — clamping never lets cuts cross
-      });
+      const next = [...sorted];
+      next[idx] = updated; // stays sorted — clamping never lets cuts cross
+      cutsRef.current = next;
+      setCuts(next);
+      requestPreviewSeek(previewTime);
     };
 
     const onUp = () => {
       setDraggingCutId(null);
       setDraggingHandle(null);
       setDragRawTime(null);
-      // Read the latest cuts via functional update to avoid a stale closure.
-      setCuts((latest) => {
-        emitSegments(latest, duration);
-        return latest;
-      });
+      emitSegments(cutsRef.current, duration);
     };
 
     window.addEventListener('pointermove', onMove);
@@ -303,7 +362,7 @@ const TrimTimeline: React.FC<TrimTimelineProps> = ({ file, onTrimSegmentsChange,
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
     };
-  }, [draggingCutId, draggingHandle, duration, keyframes, timeFromClientX, emitSegments]);
+  }, [draggingCutId, draggingHandle, duration, keyframes, timeFromClientX, emitSegments, requestPreviewSeek]);
 
   if (sizeError) {
     return (
@@ -338,11 +397,47 @@ const TrimTimeline: React.FC<TrimTimelineProps> = ({ file, onTrimSegmentsChange,
   const keepSegments = duration != null ? cutsToKeepSegments(cuts, duration) : null;
   const totalCutSeconds = cuts.reduce((sum, c) => sum + (c.end - c.start), 0);
 
+  // Compact preview sizing, capped much smaller than Tyler's main
+  // VideoPreview.tsx since this is a secondary accessory next to the
+  // track, not a main viewer. Driven by a fixed `height` (not maxHeight)
+  // with `width: auto` derived from aspect-ratio — a max-height alone on a
+  // box with no other definite dimension doesn't give a percentage-sized
+  // child (the video's `h-full`) anything to resolve against per the CSS
+  // spec, so it silently falls back to the video's raw intrinsic size and
+  // ignores the cap entirely (confirmed empirically: without this, a
+  // 320x240 video rendered at 525px tall instead of the intended 220px).
+  // A definite height sidesteps that pitfall entirely and works the same
+  // way for both vertical and horizontal video, so no orientation branch
+  // is needed.
+  const aspectRatio = videoDimensions ? videoDimensions.width / videoDimensions.height : 16 / 9;
+  const previewContainerStyle: React.CSSProperties = {
+    height: 220,
+    width: 'auto',
+    maxWidth: '100%',
+    aspectRatio: `${aspectRatio}`,
+    margin: '0 auto',
+  };
+
   return (
     <div className="space-y-3">
-      {/* Hidden video element, used only to read duration */}
+      {/* Live frame preview. The same <video> element is used to read
+          duration above (before this point it's not yet meaningful to
+          show, so it stays hidden) — kept as one element rather than two
+          so there's no second load of the file. */}
       {videoUrl && (
-        <video ref={videoRef} src={videoUrl} className="hidden" preload="metadata" />
+        <div
+          className={duration == null ? 'hidden' : 'relative bg-black rounded-lg overflow-hidden'}
+          style={duration == null ? undefined : previewContainerStyle}
+        >
+          <video
+            ref={videoRef}
+            src={videoUrl}
+            className="w-full h-full object-contain"
+            preload="metadata"
+            playsInline
+            muted
+          />
+        </div>
       )}
 
       {duration == null ? (
