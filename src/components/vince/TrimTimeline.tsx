@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { FiScissors, FiPlus, FiAlertCircle, FiLoader } from 'react-icons/fi';
+import { FiScissors, FiPlus, FiX, FiAlertCircle, FiInfo, FiLoader } from 'react-icons/fi';
 import type { TrimSegment } from '@services/vince/trim';
 // Imported directly from their own files, NOT the '@services/vince/trim'
 // barrel — the barrel's index.ts unconditionally re-exports
@@ -12,19 +12,31 @@ import { snapToNearestKeyframe } from '@services/vince/trim/snapToNearestKeyfram
 import { assertFileSizeWithinTrimLimit } from '@services/vince/trim/types';
 
 /**
- * CHECKPOINT 1 scope: renders the track, loads duration + keyframes, and
- * supports a single draggable cut region with live keyframe snapping.
- * Multi-cut add/remove and neighbor-boundary clamping between sibling
- * cuts land in the next phase — capped at one cut here on purpose so the
- * core interaction feel can be reviewed before that layer gets built on
- * top of it.
+ * Multi-segment cut timeline: draggable cut regions (start/end handles via
+ * pointer events, not native range inputs), live keyframe snapping, and
+ * neighbor-boundary clamping so cuts can never overlap or cross — each
+ * handle's drag range is constrained to its immediate neighbors (or the
+ * video's true bounds) rather than validated after the fact, so an invalid
+ * arrangement is simply unreachable.
  */
 
-// Minimum length (seconds) for both a cut region and the keep-regions on
-// either side of it, so a drag can't collapse either down to nothing.
+// Minimum length (seconds) for a cut region and for the keep-region
+// between two cuts (or between a cut and the video's edge), so a drag
+// can't collapse either down to nothing.
 const MIN_SEGMENT_SECONDS = 0.5;
 
+// Cap on simultaneous cuts — each one is an extra ffmpeg segment-extraction
+// + concat entry, so more cuts means more exec() calls and more chances
+// for one to fail mid-pipeline.
+const MAX_CUTS = 5;
+
+// Below this, a keyframe-snap falling short of the video's true start/end
+// isn't worth calling out — it reads as normal snapping, not a surprise.
+const NOTICEABLE_GAP_SECONDS = 0.3;
+const EPSILON = 0.01;
+
 interface Cut {
+  id: string;
   start: number;
   end: number;
 }
@@ -48,8 +60,9 @@ function clamp(value: number, min: number, max: number): number {
 
 /** Converts cut regions (what's removed) to the keep-segments the trim
  * module actually consumes — the complement of the cuts against the full
- * duration. Written to take an array (even though checkpoint 1 only ever
- * passes 0 or 1 cut) so this doesn't need to change in the multi-cut phase. */
+ * duration. Cuts are never overlapping/unsorted by construction (drag is
+ * clamped to neighbors), but this sorts defensively anyway since it's the
+ * one function every other calculation in this file builds on. */
 function cutsToKeepSegments(cuts: Cut[], duration: number): TrimSegment[] | null {
   if (cuts.length === 0) return null;
 
@@ -70,15 +83,50 @@ function cutsToKeepSegments(cuts: Cut[], duration: number): TrimSegment[] | null
   return keep.length > 0 ? keep : null;
 }
 
+interface UsableGap {
+  start: number;
+  end: number;
+  usableStart: number;
+  usableEnd: number;
+  usableLength: number;
+}
+
+/** Finds the largest kept gap that can still fit a new cut without
+ * violating the minimum keep-length against its neighbors — a gap
+ * touching the video's true start/end doesn't need a buffer on that side,
+ * since there's no neighbor cut there to protect. Placing every new cut
+ * inside a gap sized this way guarantees it never overlaps an existing
+ * one and never starts life below the minimum keep-length. */
+function findLargestUsableGap(cuts: Cut[], duration: number): UsableGap | null {
+  const keepGaps = cutsToKeepSegments(cuts, duration) ?? [{ start: 0, end: duration }];
+  let best: UsableGap | null = null;
+
+  for (const gap of keepGaps) {
+    const hasLeftNeighbor = gap.start > EPSILON;
+    const hasRightNeighbor = gap.end < duration - EPSILON;
+    const usableStart = gap.start + (hasLeftNeighbor ? MIN_SEGMENT_SECONDS : 0);
+    const usableEnd = gap.end - (hasRightNeighbor ? MIN_SEGMENT_SECONDS : 0);
+    const usableLength = usableEnd - usableStart;
+
+    if (usableLength >= MIN_SEGMENT_SECONDS && (!best || usableLength > best.usableLength)) {
+      best = { start: gap.start, end: gap.end, usableStart, usableEnd, usableLength };
+    }
+  }
+
+  return best;
+}
+
 const TrimTimeline: React.FC<TrimTimelineProps> = ({ file, onTrimSegmentsChange, disabled = false }) => {
   const trackRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const nextIdRef = useRef(0);
 
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [duration, setDuration] = useState<number | null>(null);
   const [keyframes, setKeyframes] = useState<number[] | null>(null);
   const [keyframesError, setKeyframesError] = useState<string | null>(null);
-  const [cut, setCut] = useState<Cut | null>(null);
+  const [cuts, setCuts] = useState<Cut[]>([]);
+  const [draggingCutId, setDraggingCutId] = useState<string | null>(null);
   const [draggingHandle, setDraggingHandle] = useState<'start' | 'end' | null>(null);
   const [dragRawTime, setDragRawTime] = useState<number | null>(null);
 
@@ -138,12 +186,12 @@ const TrimTimeline: React.FC<TrimTimelineProps> = ({ file, onTrimSegmentsChange,
   // Reset everything when the file itself changes.
   useEffect(() => {
     setDuration(null);
-    setCut(null);
+    setCuts([]);
   }, [file]);
 
   const emitSegments = useCallback(
-    (nextCut: Cut | null, currentDuration: number) => {
-      onTrimSegmentsChange(cutsToKeepSegments(nextCut ? [nextCut] : [], currentDuration));
+    (nextCuts: Cut[], currentDuration: number) => {
+      onTrimSegmentsChange(cutsToKeepSegments(nextCuts, currentDuration));
     },
     [onTrimSegmentsChange]
   );
@@ -158,60 +206,92 @@ const TrimTimeline: React.FC<TrimTimelineProps> = ({ file, onTrimSegmentsChange,
     [duration]
   );
 
+  const usableGap = duration != null ? findLargestUsableGap(cuts, duration) : null;
+  const canAddCut = duration != null && cuts.length < MAX_CUTS && usableGap != null;
+
   const handleAddCut = () => {
-    if (duration == null) return;
-    // Center a default-length cut in the middle of the video.
-    const cutLength = Math.min(2, duration / 3);
-    const start = clamp(duration / 2 - cutLength / 2, 0, duration - cutLength);
-    const initial: Cut = { start, end: start + cutLength };
-    setCut(initial);
-    emitSegments(initial, duration);
+    if (duration == null || !usableGap) return;
+    const cutLength = Math.min(2, usableGap.usableLength);
+    const start = clamp(
+      (usableGap.usableStart + usableGap.usableEnd) / 2 - cutLength / 2,
+      usableGap.usableStart,
+      usableGap.usableEnd - cutLength
+    );
+    const newCut: Cut = { id: `cut-${nextIdRef.current++}`, start, end: start + cutLength };
+
+    setCuts((prev) => {
+      const next = [...prev, newCut].sort((a, b) => a.start - b.start);
+      emitSegments(next, duration);
+      return next;
+    });
   };
 
-  const handleRemoveCut = () => {
-    setCut(null);
-    if (duration != null) emitSegments(null, duration);
+  const handleRemoveCut = (id: string) => {
+    setCuts((prev) => {
+      const next = prev.filter((c) => c.id !== id);
+      if (duration != null) emitSegments(next, duration);
+      return next;
+    });
   };
 
-  const handlePointerDown = (handle: 'start' | 'end') => (e: React.PointerEvent) => {
+  const handlePointerDown = (cutId: string, handle: 'start' | 'end') => (e: React.PointerEvent) => {
     if (disabled) return;
     e.preventDefault();
+    e.stopPropagation();
     (e.target as Element).setPointerCapture(e.pointerId);
+    setDraggingCutId(cutId);
     setDraggingHandle(handle);
   };
 
+  // Depends only on the drag session's identity (which cut/handle,
+  // duration, keyframes) — NOT on `cuts` itself — so this effect doesn't
+  // re-subscribe its window listeners on every pointermove-driven update.
   useEffect(() => {
-    if (!draggingHandle || !cut || duration == null) return;
+    if (!draggingCutId || !draggingHandle || duration == null) return;
 
     const onMove = (e: PointerEvent) => {
       const raw = timeFromClientX(e.clientX);
 
-      setCut((prev) => {
-        if (!prev) return prev;
+      setCuts((prevCuts) => {
+        const sorted = [...prevCuts].sort((a, b) => a.start - b.start);
+        const idx = sorted.findIndex((c) => c.id === draggingCutId);
+        if (idx === -1) return prevCuts;
 
+        const current = sorted[idx];
+        const prevNeighbor = sorted[idx - 1];
+        const nextNeighbor = sorted[idx + 1];
+
+        let updated: Cut;
         if (draggingHandle === 'start') {
-          const maxStart = prev.end - MIN_SEGMENT_SECONDS;
-          const clampedRaw = clamp(raw, 0, maxStart);
+          const lower = prevNeighbor ? prevNeighbor.end + MIN_SEGMENT_SECONDS : 0;
+          const upper = current.end - MIN_SEGMENT_SECONDS;
+          const clampedRaw = clamp(raw, lower, upper);
           const snapped = keyframes ? snapToNearestKeyframe(clampedRaw, keyframes) : clampedRaw;
-          const finalStart = clamp(snapped, 0, maxStart);
+          const finalStart = clamp(snapped, lower, upper);
           setDragRawTime(clampedRaw);
-          return { ...prev, start: finalStart };
+          updated = { ...current, start: finalStart };
         } else {
-          const minEnd = prev.start + MIN_SEGMENT_SECONDS;
-          const clampedRaw = clamp(raw, minEnd, duration);
+          const lower = current.start + MIN_SEGMENT_SECONDS;
+          const upper = nextNeighbor ? nextNeighbor.start - MIN_SEGMENT_SECONDS : duration;
+          const clampedRaw = clamp(raw, lower, upper);
           const snapped = keyframes ? snapToNearestKeyframe(clampedRaw, keyframes) : clampedRaw;
-          const finalEnd = clamp(snapped, minEnd, duration);
+          const finalEnd = clamp(snapped, lower, upper);
           setDragRawTime(clampedRaw);
-          return { ...prev, end: finalEnd };
+          updated = { ...current, end: finalEnd };
         }
+
+        const next = [...sorted];
+        next[idx] = updated;
+        return next; // stays sorted — clamping never lets cuts cross
       });
     };
 
     const onUp = () => {
+      setDraggingCutId(null);
       setDraggingHandle(null);
       setDragRawTime(null);
-      // Read the latest cut via functional update to avoid a stale closure.
-      setCut((latest) => {
+      // Read the latest cuts via functional update to avoid a stale closure.
+      setCuts((latest) => {
         emitSegments(latest, duration);
         return latest;
       });
@@ -223,7 +303,7 @@ const TrimTimeline: React.FC<TrimTimelineProps> = ({ file, onTrimSegmentsChange,
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
     };
-  }, [draggingHandle, cut, duration, keyframes, timeFromClientX, emitSegments]);
+  }, [draggingCutId, draggingHandle, duration, keyframes, timeFromClientX, emitSegments]);
 
   if (sizeError) {
     return (
@@ -233,6 +313,30 @@ const TrimTimeline: React.FC<TrimTimelineProps> = ({ file, onTrimSegmentsChange,
       </div>
     );
   }
+
+  // Only the very first cut's start (vs. the video's true beginning) and
+  // the very last cut's end (vs. its true end) can be "snap limited"
+  // against the video's actual boundary — an internal gap between two
+  // cuts isn't bounded by the video's edges, so it doesn't get this cue.
+  const sortedCuts = [...cuts].sort((a, b) => a.start - b.start);
+  const firstCut = sortedCuts[0];
+  const lastCut = sortedCuts[sortedCuts.length - 1];
+  const firstKeyframe = keyframes && keyframes.length > 0 ? keyframes[0] : null;
+  const lastKeyframe = keyframes && keyframes.length > 0 ? keyframes[keyframes.length - 1] : null;
+
+  const startSnapGap =
+    duration != null && firstCut && firstKeyframe != null && Math.abs(firstCut.start - firstKeyframe) < EPSILON
+      ? firstCut.start
+      : 0;
+  const endSnapGap =
+    duration != null && lastCut && lastKeyframe != null && Math.abs(lastCut.end - lastKeyframe) < EPSILON
+      ? duration - lastCut.end
+      : 0;
+  const startIsSnapLimited = startSnapGap > NOTICEABLE_GAP_SECONDS;
+  const endIsSnapLimited = endSnapGap > NOTICEABLE_GAP_SECONDS;
+
+  const keepSegments = duration != null ? cutsToKeepSegments(cuts, duration) : null;
+  const totalCutSeconds = cuts.reduce((sum, c) => sum + (c.end - c.start), 0);
 
   return (
     <div className="space-y-3">
@@ -266,53 +370,97 @@ const TrimTimeline: React.FC<TrimTimelineProps> = ({ file, onTrimSegmentsChange,
             ref={trackRef}
             className="relative w-full h-12 bg-gray-200 dark:bg-gray-700 rounded-lg overflow-hidden select-none"
           >
-            {cut && (
-              <>
-                {/* Cut region (what gets removed) */}
-                <div
-                  className="absolute top-0 h-full bg-red-400/60 dark:bg-red-500/40"
-                  style={{
-                    left: `${(cut.start / duration) * 100}%`,
-                    width: `${((cut.end - cut.start) / duration) * 100}%`,
-                  }}
-                />
-
-                {/* Faint raw-pointer marker, shown while dragging if it
-                    differs from the snapped (committed) handle position */}
-                {draggingHandle && dragRawTime != null && Math.abs(
-                  dragRawTime - (draggingHandle === 'start' ? cut.start : cut.end)
-                ) > 0.05 && (
-                  <div
-                    className="absolute top-0 h-full w-0.5 bg-gray-500 dark:bg-gray-300 opacity-60"
-                    style={{ left: `${(dragRawTime / duration) * 100}%` }}
-                  />
-                )}
-
-                {/* Start handle */}
-                <div
-                  onPointerDown={handlePointerDown('start')}
-                  className={`absolute top-0 h-full w-3 -ml-1.5 bg-primary-600 hover:bg-primary-700 cursor-ew-resize touch-none rounded ${disabled ? 'pointer-events-none opacity-50' : ''}`}
-                  style={{ left: `${(cut.start / duration) * 100}%` }}
-                  role="slider"
-                  aria-label="Cut start"
-                  aria-valuemin={0}
-                  aria-valuemax={duration}
-                  aria-valuenow={cut.start}
-                />
-
-                {/* End handle */}
-                <div
-                  onPointerDown={handlePointerDown('end')}
-                  className={`absolute top-0 h-full w-3 -ml-1.5 bg-primary-600 hover:bg-primary-700 cursor-ew-resize touch-none rounded ${disabled ? 'pointer-events-none opacity-50' : ''}`}
-                  style={{ left: `${(cut.end / duration) * 100}%` }}
-                  role="slider"
-                  aria-label="Cut end"
-                  aria-valuemin={0}
-                  aria-valuemax={duration}
-                  aria-valuenow={cut.end}
-                />
-              </>
+            {/* Keyframe-limited "kept" slivers at the very start/end of the
+                video — hatched instead of plain background so they read as
+                a deliberate technical limit, not an unstyled gap, with the
+                explanatory text below spelling out why. */}
+            {startIsSnapLimited && firstCut && (
+              <div
+                className="absolute top-0 h-full"
+                style={{
+                  left: 0,
+                  width: `${(firstCut.start / duration) * 100}%`,
+                  backgroundImage:
+                    'repeating-linear-gradient(45deg, rgba(217,119,6,0.18) 0px, rgba(217,119,6,0.18) 4px, transparent 4px, transparent 9px)',
+                }}
+              />
             )}
+            {endIsSnapLimited && lastCut && (
+              <div
+                className="absolute top-0 h-full"
+                style={{
+                  left: `${(lastCut.end / duration) * 100}%`,
+                  width: `${((duration - lastCut.end) / duration) * 100}%`,
+                  backgroundImage:
+                    'repeating-linear-gradient(45deg, rgba(217,119,6,0.18) 0px, rgba(217,119,6,0.18) 4px, transparent 4px, transparent 9px)',
+                }}
+              />
+            )}
+
+            {sortedCuts.map((cut) => {
+              const isDraggingThis = draggingCutId === cut.id;
+              const midPercent = ((cut.start + cut.end) / 2 / duration) * 100;
+
+              return (
+                <React.Fragment key={cut.id}>
+                  {/* Cut region (what gets removed) */}
+                  <div
+                    className="absolute top-0 h-full bg-red-400/60 dark:bg-red-500/40"
+                    style={{
+                      left: `${(cut.start / duration) * 100}%`,
+                      width: `${((cut.end - cut.start) / duration) * 100}%`,
+                    }}
+                  />
+
+                  {/* Faint raw-pointer marker, shown while dragging if it
+                      differs from the snapped (committed) handle position */}
+                  {isDraggingThis && draggingHandle && dragRawTime != null && Math.abs(
+                    dragRawTime - (draggingHandle === 'start' ? cut.start : cut.end)
+                  ) > 0.05 && (
+                    <div
+                      className="absolute top-0 h-full w-0.5 bg-gray-500 dark:bg-gray-300 opacity-60"
+                      style={{ left: `${(dragRawTime / duration) * 100}%` }}
+                    />
+                  )}
+
+                  {/* Remove button, centered in the cut region */}
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveCut(cut.id)}
+                    disabled={disabled}
+                    aria-label="Remove this cut"
+                    className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 z-10 flex items-center justify-center w-7 h-7 rounded-full bg-white/90 dark:bg-gray-900/80 text-red-600 dark:text-red-400 hover:bg-white dark:hover:bg-gray-900 shadow ${disabled ? 'pointer-events-none opacity-50' : ''}`}
+                    style={{ left: `${midPercent}%` }}
+                  >
+                    <FiX className="w-4 h-4" />
+                  </button>
+
+                  {/* Start handle */}
+                  <div
+                    onPointerDown={handlePointerDown(cut.id, 'start')}
+                    className={`absolute top-0 h-full w-3 -ml-1.5 bg-primary-600 hover:bg-primary-700 cursor-ew-resize touch-none rounded ${disabled ? 'pointer-events-none opacity-50' : ''}`}
+                    style={{ left: `${(cut.start / duration) * 100}%` }}
+                    role="slider"
+                    aria-label="Cut start"
+                    aria-valuemin={0}
+                    aria-valuemax={duration}
+                    aria-valuenow={cut.start}
+                  />
+
+                  {/* End handle */}
+                  <div
+                    onPointerDown={handlePointerDown(cut.id, 'end')}
+                    className={`absolute top-0 h-full w-3 -ml-1.5 bg-primary-600 hover:bg-primary-700 cursor-ew-resize touch-none rounded ${disabled ? 'pointer-events-none opacity-50' : ''}`}
+                    style={{ left: `${(cut.end / duration) * 100}%` }}
+                    role="slider"
+                    aria-label="Cut end"
+                    aria-valuemin={0}
+                    aria-valuemax={duration}
+                    aria-valuenow={cut.end}
+                  />
+                </React.Fragment>
+              );
+            })}
           </div>
 
           <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
@@ -320,53 +468,55 @@ const TrimTimeline: React.FC<TrimTimelineProps> = ({ file, onTrimSegmentsChange,
             <span>{formatTime(duration)}</span>
           </div>
 
-          {/* Live readout + add/remove. Derived from the same
-              cutsToKeepSegments() conversion that's actually emitted, so
-              the readout can never show a "kept" range (e.g. a zero-length
-              sliver when a cut reaches the video's edge) that disagrees
-              with what trimVideo() will actually receive. */}
-          {cut ? (
-            <div className="flex items-center justify-between gap-3 flex-wrap">
-              <p className="text-sm text-gray-700 dark:text-gray-300">
-                Cutting <span className="font-medium">{formatTime(cut.start)}–{formatTime(cut.end)}</span>
-                {' '}({formatTime(cut.end - cut.start)})
-                {(() => {
-                  const keepSegments = cutsToKeepSegments([cut], duration);
-                  if (!keepSegments || keepSegments.length === 0) return null;
-                  return (
-                    <>
-                      {' '}— keeping{' '}
-                      {keepSegments.map((seg, i) => (
-                        <React.Fragment key={i}>
-                          {i > 0 && ' and '}
-                          <span className="font-medium">{formatTime(seg.start)}–{formatTime(seg.end)}</span>
-                        </React.Fragment>
-                      ))}
-                    </>
-                  );
-                })()}
-              </p>
-              <button
-                type="button"
-                onClick={handleRemoveCut}
-                disabled={disabled}
-                className="text-xs font-medium text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Remove cut
-              </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={handleAddCut}
-              disabled={disabled}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <FiScissors className="w-3.5 h-3.5" />
-              <FiPlus className="w-3.5 h-3.5" />
-              Add cut
-            </button>
+          {(startIsSnapLimited || endIsSnapLimited) && (
+            <p className="flex items-start gap-1.5 text-xs text-amber-600 dark:text-amber-400">
+              <FiInfo className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+              <span>
+                {startIsSnapLimited && endIsSnapLimited
+                  ? `This browser can't cut all the way to the very start or end of this video — the nearest usable keyframes are ${formatTime(startSnapGap)} in and ${formatTime(endSnapGap)} before the end.`
+                  : startIsSnapLimited
+                  ? `This browser can't cut all the way to the very start of this video — the nearest usable keyframe is ${formatTime(startSnapGap)} in.`
+                  : `This browser can't cut all the way to the very end of this video — the nearest usable keyframe is ${formatTime(endSnapGap)} before the end.`}
+              </span>
+            </p>
           )}
+
+          {/* Live readout, derived from the same cutsToKeepSegments()
+              conversion that's actually emitted, so it can never disagree
+              with what trimVideo() will receive. */}
+          {cuts.length > 0 ? (
+            <p className="text-sm text-gray-700 dark:text-gray-300">
+              Cutting {cuts.length} {cuts.length === 1 ? 'segment' : 'segments'}
+              {' '}({formatTime(totalCutSeconds)} total)
+              {keepSegments && keepSegments.length > 0 && (
+                <>
+                  {' '}— keeping{' '}
+                  {keepSegments.map((seg, i) => (
+                    <React.Fragment key={i}>
+                      {i > 0 && ', '}
+                      <span className="font-medium">{formatTime(seg.start)}–{formatTime(seg.end)}</span>
+                    </React.Fragment>
+                  ))}
+                </>
+              )}
+            </p>
+          ) : (
+            <p className="text-xs text-gray-400 dark:text-gray-500">
+              No cuts yet — the full video will be processed as-is.
+            </p>
+          )}
+
+          <button
+            type="button"
+            onClick={handleAddCut}
+            disabled={disabled || !canAddCut}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
+            title={cuts.length >= MAX_CUTS ? `Up to ${MAX_CUTS} cuts at a time` : undefined}
+          >
+            <FiScissors className="w-3.5 h-3.5" />
+            <FiPlus className="w-3.5 h-3.5" />
+            Add cut
+          </button>
         </>
       )}
     </div>
