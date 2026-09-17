@@ -116,6 +116,35 @@ function findLargestUsableGap(cuts: Cut[], duration: number): UsableGap | null {
   return best;
 }
 
+interface PlaybackStart {
+  index: number;
+  time: number;
+}
+
+/** Resolves where "Play edit" should actually start from, given wherever
+ * the playhead currently sits — walking `segments` in the same order
+ * handleTimeUpdate already walks them during playback, so this is the
+ * one-time "find the entry point" counterpart to that ongoing "advance
+ * forward" logic, not a separate paradigm.
+ *
+ * - Playhead inside a kept segment: resume from that exact time (not that
+ *   segment's start) — a literal resume, not "jump to the top of
+ *   whichever segment it's near".
+ * - Playhead inside a cut: jump forward to the next kept segment's start,
+ *   since there's nothing playable at the playhead's own position.
+ * - Playhead at or past all kept content (e.g. parked in a trailing cut
+ *   with nothing kept after it): null — the caller falls back to
+ *   restarting from the beginning, since a Play press that visibly does
+ *   nothing would look broken. */
+function resolvePlaybackStart(segments: TrimSegment[], playheadTime: number): PlaybackStart | null {
+  for (let i = 0; i < segments.length; i++) {
+    const seg = segments[i];
+    if (playheadTime < seg.start) return { index: i, time: seg.start };
+    if (playheadTime < seg.end) return { index: i, time: playheadTime };
+  }
+  return null;
+}
+
 const TrimTimeline: React.FC<TrimTimelineProps> = ({ file, onTrimSegmentsChange, disabled = false }) => {
   const trackRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -275,9 +304,16 @@ const TrimTimeline: React.FC<TrimTimelineProps> = ({ file, onTrimSegmentsChange,
 
     const segments = cutsToKeepSegments(cutsRef.current, duration) ?? [{ start: 0, end: duration }];
     activeSegmentsRef.current = segments;
-    activeSegmentIndexRef.current = 0;
-    video.currentTime = segments[0].start;
-    setPlayheadTime(segments[0].start);
+
+    // Resume from wherever the playhead was left, rather than always
+    // restarting from the first kept segment: exactly at that position if
+    // it's inside a kept segment, jumped forward to the next kept
+    // segment's start if it's sitting in a cut, or a restart-from-the-top
+    // fallback if there's nothing kept left after it at all.
+    const resolved = resolvePlaybackStart(segments, playheadTime ?? 0) ?? { index: 0, time: segments[0].start };
+    activeSegmentIndexRef.current = resolved.index;
+    video.currentTime = resolved.time;
+    setPlayheadTime(resolved.time);
     // Safe to unmute here specifically because this runs synchronously
     // inside a real click handler — browsers require exactly that (a
     // direct user gesture) to allow unmuted playback triggered from JS;
