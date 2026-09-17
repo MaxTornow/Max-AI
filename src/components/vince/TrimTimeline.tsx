@@ -138,13 +138,21 @@ const TrimTimeline: React.FC<TrimTimelineProps> = ({ file, onTrimSegmentsChange,
     cutsRef.current = cuts;
   }, [cuts]);
   const [draggingCutId, setDraggingCutId] = useState<string | null>(null);
-  const [draggingHandle, setDraggingHandle] = useState<'start' | 'end' | null>(null);
+  const [draggingHandle, setDraggingHandle] = useState<'start' | 'end' | 'move' | null>(null);
   const [dragRawTime, setDragRawTime] = useState<number | null>(null);
+  // Offset (seconds) between the pointer and the cut's start at the moment
+  // a "move" drag begins, so the cut slides by the pointer's delta rather
+  // than snapping its start to the pointer position outright.
+  const moveGrabOffsetRef = useRef(0);
   const [isPlayingEdit, setIsPlayingEdit] = useState(false);
-  // Playhead position on the track during "Play edit" playback — null
-  // whenever not playing, so the marker only ever renders during that
-  // mode (a drag's own handle position already serves as its indicator).
+  // Playhead position on the track — persistent (not play-mode-only): set
+  // once duration is known, tracked live during "Play edit" playback, and
+  // directly draggable at any time to scrub the frame preview. Not shown
+  // during a cut drag — a handle's own position already serves as its
+  // indicator there, and starting a cut drag or a playhead drag each stop
+  // the other via pauseEditPreview()/dragging-state checks below.
   const [playheadTime, setPlayheadTime] = useState<number | null>(null);
+  const [isDraggingPlayhead, setIsDraggingPlayhead] = useState(false);
   // Snapshotted once when playback starts (not recomputed per tick) — cuts
   // can't change while playback is active (see pauseEditPreview() below),
   // so this is a stable source of truth for the whole playback session.
@@ -175,6 +183,7 @@ const TrimTimeline: React.FC<TrimTimelineProps> = ({ file, onTrimSegmentsChange,
     const handleLoadedMetadata = () => {
       setDuration(video.duration);
       setVideoDimensions({ width: video.videoWidth, height: video.videoHeight });
+      setPlayheadTime(0);
     };
     video.addEventListener('loadedmetadata', handleLoadedMetadata);
     return () => video.removeEventListener('loadedmetadata', handleLoadedMetadata);
@@ -245,7 +254,10 @@ const TrimTimeline: React.FC<TrimTimelineProps> = ({ file, onTrimSegmentsChange,
       video.muted = true;
     }
     setIsPlayingEdit(false);
-    setPlayheadTime(null);
+    // playheadTime is intentionally left as-is here — it's a persistent
+    // scrub cursor now, not a play-mode-only artifact, so pausing (or
+    // reaching the end) should leave it showing exactly where playback
+    // stopped rather than disappearing.
   }, []);
 
   const pauseEditPreview = useCallback(() => {
@@ -369,6 +381,8 @@ const TrimTimeline: React.FC<TrimTimelineProps> = ({ file, onTrimSegmentsChange,
     setDuration(null);
     setCuts([]);
     setIsPlayingEdit(false);
+    setPlayheadTime(null);
+    setIsDraggingPlayhead(false);
   }, [file]);
 
   // If the whole panel becomes disabled (e.g. processing starts) while an
@@ -425,15 +439,54 @@ const TrimTimeline: React.FC<TrimTimelineProps> = ({ file, onTrimSegmentsChange,
     });
   };
 
-  const handlePointerDown = (cutId: string, handle: 'start' | 'end') => (e: React.PointerEvent) => {
+  const handlePointerDown = (cutId: string, handle: 'start' | 'end' | 'move') => (e: React.PointerEvent) => {
     if (disabled) return;
     pauseEditPreview();
     e.preventDefault();
     e.stopPropagation();
     (e.target as Element).setPointerCapture(e.pointerId);
+    if (handle === 'move') {
+      const cut = cutsRef.current.find((c) => c.id === cutId);
+      if (cut) moveGrabOffsetRef.current = timeFromClientX(e.clientX) - cut.start;
+    }
     setDraggingCutId(cutId);
     setDraggingHandle(handle);
   };
+
+  // Playhead scrubbing: independent of the cuts-drag state above (it's
+  // not tied to any cut), unsnapped on purpose — this only ever drives
+  // the frame preview via requestPreviewSeek(), never a cut boundary, so
+  // there's no correctness requirement it land on a real keyframe the way
+  // a cut edge does for trimVideo()'s stream-copy extraction.
+  const handlePlayheadPointerDown = (e: React.PointerEvent) => {
+    if (disabled || duration == null) return;
+    pauseEditPreview();
+    e.preventDefault();
+    e.stopPropagation();
+    (e.target as Element).setPointerCapture(e.pointerId);
+    setIsDraggingPlayhead(true);
+  };
+
+  useEffect(() => {
+    if (!isDraggingPlayhead || duration == null) return;
+
+    const onMove = (e: PointerEvent) => {
+      const clamped = clamp(timeFromClientX(e.clientX), 0, duration);
+      setPlayheadTime(clamped);
+      requestPreviewSeek(clamped);
+    };
+
+    const onUp = () => {
+      setIsDraggingPlayhead(false);
+    };
+
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+  }, [isDraggingPlayhead, duration, timeFromClientX, requestPreviewSeek]);
 
   // Depends only on the drag session's identity (which cut/handle,
   // duration, keyframes) — NOT on `cuts` itself — so this effect doesn't
@@ -467,7 +520,7 @@ const TrimTimeline: React.FC<TrimTimelineProps> = ({ file, onTrimSegmentsChange,
         setDragRawTime(clampedRaw);
         previewTime = finalStart;
         updated = { ...current, start: finalStart };
-      } else {
+      } else if (draggingHandle === 'end') {
         const lower = current.start + MIN_SEGMENT_SECONDS;
         const upper = nextNeighbor ? nextNeighbor.start - MIN_SEGMENT_SECONDS : duration;
         const clampedRaw = clamp(raw, lower, upper);
@@ -476,6 +529,34 @@ const TrimTimeline: React.FC<TrimTimelineProps> = ({ file, onTrimSegmentsChange,
         setDragRawTime(clampedRaw);
         previewTime = finalEnd;
         updated = { ...current, end: finalEnd };
+      } else {
+        // Move: same length, whole cut repositioned as a unit. The two
+        // independent per-edge bounds collapse into a single allowable
+        // range for the new start, since the length can't change — moving
+        // it as far right as the end's own neighbor-bound allows, or as
+        // far left as the start's own neighbor-bound allows, whichever is
+        // tighter. Only the leading edge snaps to a keyframe (matching a
+        // normal start-handle drag); the trailing edge simply follows at a
+        // fixed offset so the length is preserved exactly. Snapping both
+        // edges independently was considered and rejected: keyframes
+        // aren't evenly spaced, so independently-snapped edges would drift
+        // the length by an uncontrolled amount — indistinguishable from an
+        // accidental resize, defeating the point of "move". trimVideo()
+        // still re-snaps every boundary independently at actual-trim-time
+        // regardless (its own "trust boundary" safety net), so the
+        // trailing edge isn't literally unaligned in the final output —
+        // just not shown snapped during this specific drag.
+        const length = current.end - current.start;
+        const lowerBoundForStart = prevNeighbor ? prevNeighbor.end + MIN_SEGMENT_SECONDS : 0;
+        const upperBoundForEnd = nextNeighbor ? nextNeighbor.start - MIN_SEGMENT_SECONDS : duration;
+        const upperBoundForStart = upperBoundForEnd - length;
+        const rawNewStart = raw - moveGrabOffsetRef.current;
+        const clampedRaw = clamp(rawNewStart, lowerBoundForStart, upperBoundForStart);
+        const snapped = keyframes ? snapToNearestKeyframe(clampedRaw, keyframes) : clampedRaw;
+        const finalStart = clamp(snapped, lowerBoundForStart, upperBoundForStart);
+        setDragRawTime(clampedRaw);
+        previewTime = finalStart;
+        updated = { ...current, start: finalStart, end: finalStart + length };
       }
 
       const next = [...sorted];
@@ -665,19 +746,32 @@ const TrimTimeline: React.FC<TrimTimelineProps> = ({ file, onTrimSegmentsChange,
 
               return (
                 <React.Fragment key={cut.id}>
-                  {/* Cut region (what gets removed) */}
+                  {/* Cut region (what gets removed) — also the "move
+                      whole cut" drag target. This works without any extra
+                      hit-testing logic: the two edge handles below render
+                      AFTER this in DOM order and already sit on top of
+                      their own strip of it, so a press within either
+                      handle's zone reaches the handle first (resize) and
+                      a press anywhere else in the region reaches this
+                      (move) — ordinary DOM stacking already resolves
+                      "grabbed the edge" vs. "grabbed the middle". */}
                   <div
-                    className="absolute top-0 h-full bg-red-400/60 dark:bg-red-500/40"
+                    onPointerDown={handlePointerDown(cut.id, 'move')}
+                    className={`absolute top-0 h-full bg-red-400/60 dark:bg-red-500/40 cursor-grab touch-none ${disabled ? 'pointer-events-none' : ''}`}
                     style={{
                       left: `${(cut.start / duration) * 100}%`,
                       width: `${((cut.end - cut.start) / duration) * 100}%`,
                     }}
+                    aria-label="Move this cut"
                   />
 
                   {/* Faint raw-pointer marker, shown while dragging if it
-                      differs from the snapped (committed) handle position */}
+                      differs from the snapped (committed) handle position.
+                      Compared against cut.start for both 'start' and
+                      'move' drags — both anchor on (and snap) the leading
+                      edge; only 'end' drags anchor on the trailing edge. */}
                   {isDraggingThis && draggingHandle && dragRawTime != null && Math.abs(
-                    dragRawTime - (draggingHandle === 'start' ? cut.start : cut.end)
+                    dragRawTime - (draggingHandle === 'end' ? cut.end : cut.start)
                   ) > 0.05 && (
                     <div
                       className="absolute top-0 h-full w-0.5 bg-gray-500 dark:bg-gray-300 opacity-60"
@@ -685,58 +779,93 @@ const TrimTimeline: React.FC<TrimTimelineProps> = ({ file, onTrimSegmentsChange,
                     />
                   )}
 
-                  {/* Remove button, centered in the cut region */}
+                  {/* Remove button, horizontally centered but anchored to
+                      the TOP edge rather than the region's true center —
+                      dead-center is also the natural spot to grab for a
+                      "move" drag, and since this button has no
+                      onPointerDown handler, a pointerdown landing on it
+                      would reach neither the button (not a full click,
+                      it's the start of a drag) nor the move-region beneath
+                      it (this button paints on top, so the region never
+                      sees the event at all). Anchoring to the top leaves
+                      the rest of the region's height clear for that grab. */}
                   <button
                     type="button"
                     onClick={() => handleRemoveCut(cut.id)}
                     disabled={disabled}
                     aria-label="Remove this cut"
-                    className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 z-10 flex items-center justify-center w-7 h-7 rounded-full bg-white/90 dark:bg-gray-900/80 text-red-600 dark:text-red-400 hover:bg-white dark:hover:bg-gray-900 shadow ${disabled ? 'pointer-events-none opacity-50' : ''}`}
+                    className={`absolute top-1 -translate-x-1/2 z-10 flex items-center justify-center w-7 h-7 rounded-full bg-white/90 dark:bg-gray-900/80 text-red-600 dark:text-red-400 hover:bg-white dark:hover:bg-gray-900 shadow ${disabled ? 'pointer-events-none opacity-50' : ''}`}
                     style={{ left: `${midPercent}%` }}
                   >
                     <FiX className="w-4 h-4" />
                   </button>
 
-                  {/* Start handle */}
+                  {/* Start handle — outer div is a wider invisible hit-zone
+                      (24px vs. the 12px visible bar), reducing mis-taps on
+                      touchscreens between this (resize) and the region
+                      body (move) it sits on top of. group/group-hover
+                      moves the hover-color feedback to the visible inner
+                      bar, matching the pattern the play/pause overlay
+                      button above already uses. */}
                   <div
                     onPointerDown={handlePointerDown(cut.id, 'start')}
-                    className={`absolute top-0 h-full w-3 -ml-1.5 bg-primary-600 hover:bg-primary-700 cursor-ew-resize touch-none rounded ${disabled ? 'pointer-events-none opacity-50' : ''}`}
+                    className={`absolute top-0 h-full w-6 -ml-3 flex justify-center cursor-ew-resize touch-none group ${disabled ? 'pointer-events-none opacity-50' : ''}`}
                     style={{ left: `${(cut.start / duration) * 100}%` }}
                     role="slider"
                     aria-label="Cut start"
                     aria-valuemin={0}
                     aria-valuemax={duration}
                     aria-valuenow={cut.start}
-                  />
+                  >
+                    <div className="w-3 h-full bg-primary-600 group-hover:bg-primary-700 rounded pointer-events-none" />
+                  </div>
 
-                  {/* End handle */}
+                  {/* End handle — same wider-hit-zone treatment as start. */}
                   <div
                     onPointerDown={handlePointerDown(cut.id, 'end')}
-                    className={`absolute top-0 h-full w-3 -ml-1.5 bg-primary-600 hover:bg-primary-700 cursor-ew-resize touch-none rounded ${disabled ? 'pointer-events-none opacity-50' : ''}`}
+                    className={`absolute top-0 h-full w-6 -ml-3 flex justify-center cursor-ew-resize touch-none group ${disabled ? 'pointer-events-none opacity-50' : ''}`}
                     style={{ left: `${(cut.end / duration) * 100}%` }}
                     role="slider"
                     aria-label="Cut end"
                     aria-valuemin={0}
                     aria-valuemax={duration}
                     aria-valuenow={cut.end}
-                  />
+                  >
+                    <div className="w-3 h-full bg-primary-600 group-hover:bg-primary-700 rounded pointer-events-none" />
+                  </div>
                 </React.Fragment>
               );
             })}
 
-            {/* "Play edit" playhead — only ever rendered during that
-                playback mode (a drag's own handle position already serves
-                as its indicator, so this would just duplicate it there).
-                Deliberately no CSS transition: see the handleTimeUpdate
-                effect above for why a smoothed position would misrepresent
-                the discrete jump across a cut. Rendered last so it's
-                topmost, though in practice it can never coincide with an
-                active drag — starting one calls pauseEditPreview() first. */}
+            {/* Playhead — persistent scrub cursor (visible whenever the
+                video is loaded, not just during "Play edit" playback) and
+                directly draggable. Rendered last so it's topmost, meaning
+                it wins hit-testing over a cut region/handle it happens to
+                visually overlap; a cut drag's own handle position already
+                serves as that drag's indicator, and grabbing this pauses
+                any active edit-preview playback first (handlePlayheadPointerDown),
+                so the two can't fight over the video element at once.
+                Deliberately no CSS transition on its position: see the
+                handleTimeUpdate effect above for why a smoothed position
+                would misrepresent the discrete jump across a cut during
+                playback — dragging needs the same 1:1, no-lag positioning
+                for the same reason every other drag in this file has it.
+                Outer div is a wider invisible hit-zone (20px) around the
+                2px visible line, same touch-friendliness reasoning as the
+                widened resize-handle hit-zones above. */}
             {playheadTime != null && (
               <div
-                className="absolute top-0 h-full w-0.5 bg-gray-900 dark:bg-white pointer-events-none"
+                onPointerDown={handlePlayheadPointerDown}
+                className={`absolute top-0 h-full w-5 -ml-2.5 cursor-ew-resize touch-none z-20 ${disabled ? 'pointer-events-none' : ''}`}
                 style={{ left: `${(playheadTime / duration) * 100}%` }}
-              />
+                role="slider"
+                aria-label="Playhead"
+                aria-valuemin={0}
+                aria-valuemax={duration}
+                aria-valuenow={playheadTime}
+              >
+                <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-0.5 bg-gray-900 dark:bg-white pointer-events-none" />
+              </div>
             )}
           </div>
 
