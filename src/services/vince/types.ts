@@ -115,6 +115,8 @@ export interface Video {
   caption_position_x: number | null;
   /** Body caption vertical position (range 0-80, confirmed via live Submagic API testing Aug 1, 2026 -- NOT the same range as caption_position_x; null = not set by user) */
   caption_position_y: number | null;
+  /** Transcript captured from Submagic on job completion (text + timed segments). Null if not yet captured. */
+  transcript: SubmagicTranscript | null;
   error_message: string | null;
   retry_count: number;
   created_at: string;

@@ -300,7 +300,7 @@ const VincePage: React.FC = () => {
                 console.log('Timed-out video', video.id, 'actually completed on Submagic, saving...');
                 await completeVideoProcessing(
                   video.id, user!.id, video.original_filename,
-                  video.original_storage_path, videoUrl
+                  video.original_storage_path, videoUrl, status.transcript
                 );
                 needsRefetch = true;
                 continue;
@@ -327,7 +327,7 @@ const VincePage: React.FC = () => {
           console.log('Video', video.id, 'completed, updating database with URL:', videoUrl);
           await completeVideoProcessing(
             video.id, user!.id, video.original_filename,
-            video.original_storage_path, videoUrl
+            video.original_storage_path, videoUrl, status.transcript
           );
           needsRefetch = true;
         } else if (status.status === 'failed') {
@@ -468,7 +468,7 @@ const VincePage: React.FC = () => {
             currentVideoId, user!.id,
             selectedFile?.name || 'video.mp4',
             uploadState.status === 'uploaded' ? uploadState.storagePath : '',
-            videoUrl
+            videoUrl, projectStatus.transcript
           );
 
           setProcessingState({ status: 'completed', videoId: currentVideoId });
@@ -666,6 +666,7 @@ const VincePage: React.FC = () => {
       hook_title_position: hookTitleEnabled ? hookTitlePosition : null,
       caption_position_x: captionPositionX,
       caption_position_y: captionPositionY,
+      transcript: null,
       error_message: null,
       retry_count: 0,
       processing_started_at: null,

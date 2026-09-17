@@ -9,6 +9,7 @@ import type {
   SubmagicCreateProjectRequest,
   SubmagicCreateProjectResponse,
   SubmagicProjectResponse,
+  SubmagicTranscript,
 } from './types';
 import { MAX_TITLE_LENGTH } from './types';
 import { retryableFetch } from './retry';
@@ -231,7 +232,8 @@ export const completeVideoProcessing = async (
   userId: string,
   originalFilename: string,
   originalStoragePath: string,
-  downloadUrl: string
+  downloadUrl: string,
+  transcript?: SubmagicTranscript
 ): Promise<string> => {
   // 1. Download from Submagic and save to Supabase Storage
   const processedPath = await saveProcessedVideo(downloadUrl, userId, originalFilename);
@@ -242,6 +244,7 @@ export const completeVideoProcessing = async (
     processed_storage_path: processedPath,
     submagic_download_url: downloadUrl,
     processing_completed_at: new Date().toISOString(),
+    transcript: transcript ?? null,
   });
 
   return processedPath;
