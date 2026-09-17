@@ -10,6 +10,7 @@ import TabNav, { VinceTab } from '@components/vince/TabNav';
 import VideoUploader from '@components/vince/VideoUploader';
 import TemplateSelector from '@components/vince/TemplateSelector';
 import FeatureToggles from '@components/vince/FeatureToggles';
+import TrimTimeline from '@components/vince/TrimTimeline';
 import ProcessingProgress from '@components/vince/ProcessingProgress';
 import VideoLibrary from '@components/vince/VideoLibrary';
 
@@ -27,6 +28,12 @@ import {
 import { formatSubmagicErrorMessage } from '@services/vince/retry';
 import { VINCE_TEMPLATES, getDefaultTemplate } from '@services/vince/templates';
 import type { Video, VinceTemplate, UploadState, ProcessingState, SilencePace } from '@services/vince/types';
+// Imported directly from its own file, not the '@services/vince/trim'
+// barrel — the barrel unconditionally re-exports getKeyframeTimestamps/
+// trimVideo too, which would pull ffmpeg.wasm into this page's main bundle
+// for every user, not just the ones who open the trim panel. types.ts has
+// zero dependencies, so this stays a cheap, synchronous import.
+import { TrimError, assertFileSizeWithinTrimLimit } from '@services/vince/trim/types';
 
 const POLL_INTERVAL = parseInt(import.meta.env.VITE_SUBMAGIC_POLL_INTERVAL_MS || '30000');
 const VINCE_SETTINGS_KEY = 'vince_editor_settings';
@@ -113,6 +120,14 @@ const VincePage: React.FC = () => {
 
   // Tab state
   const [activeTab, setActiveTab] = useState<VinceTab>('editor');
+
+  // Trim panel starts collapsed — most users uploading an already-cut clip
+  // never need it.
+  const [trimPanelOpen, setTrimPanelOpen] = useState(false);
+
+  // Set at the start of a trim, cleared when it finishes (success, failure,
+  // or cancellation) — handleCancelTrim() aborts whichever run is current.
+  const trimAbortControllerRef = useRef<AbortController | null>(null);
 
   // Load saved settings once on mount
   const savedSettings = loadSavedSettings();
@@ -544,6 +559,7 @@ const VincePage: React.FC = () => {
     // Any previously-chosen cut points were defined against a different
     // video's timeline — meaningless (and dangerous to reuse) here.
     setTrimSegments(null);
+    setTrimPanelOpen(false);
   }, [setSelectedFile, setTrimSegments]);
 
   // Handle file removal
@@ -552,23 +568,25 @@ const VincePage: React.FC = () => {
     setUploadState({ status: 'idle' });
     setProcessingState({ status: 'idle' });
     setTrimSegments(null);
+    setTrimPanelOpen(false);
   }, [setSelectedFile, setTrimSegments]);
 
   // Step 0: Trim the raw, not-yet-uploaded file client-side if the user
-  // defined cut points (via Step 4's timeline UI — not built yet, so
-  // trimSegments is always null/empty today and this is a no-op for every
-  // current user). Runs BEFORE any upload: the trimmed output simply
-  // becomes the one-and-only original that gets uploaded, so there's never
-  // a "which original wins" question — see docs/PR discussion for why this
-  // is scoped to new uploads only, not re-trimming an already-processed video.
+  // defined cut points via the trim timeline. Runs BEFORE any upload: the
+  // trimmed output simply becomes the one-and-only original that gets
+  // uploaded, so there's never a "which original wins" question — see
+  // docs/PR discussion for why this is scoped to new uploads only, not
+  // re-trimming an already-processed video.
   const trimSelectedFileIfNeeded = async (file: File): Promise<File> => {
     if (!trimSegments || trimSegments.length === 0) return file;
 
     // Dynamically imported so ffmpeg.wasm (and its @ffmpeg/* JS deps) are
     // never pulled into the app's bundle for the vast majority of users who
-    // never trim, matching the same care taken for the dev-only debug hook
-    // in main.tsx.
+    // never trim.
     const { trimVideo } = await import('@services/vince/trim');
+
+    const controller = new AbortController();
+    trimAbortControllerRef.current = controller;
 
     setProcessingState({
       status: 'trimming',
@@ -578,22 +596,39 @@ const VincePage: React.FC = () => {
     });
 
     try {
-      return await trimVideo(file, trimSegments, (p) => {
-        setProcessingState({
-          status: 'trimming',
-          phase: p.phase,
-          progress: p.progress,
-          message: p.message,
-        });
-      });
+      return await trimVideo(
+        file,
+        trimSegments,
+        (p) => {
+          setProcessingState({
+            status: 'trimming',
+            phase: p.phase,
+            progress: p.progress,
+            message: p.message,
+          });
+        },
+        controller.signal
+      );
     } catch (error) {
-      // Re-throw as a plain Error carrying TrimError's already-UI-safe
-      // message, so the catch block in handleProcessVideo doesn't need to
-      // know anything about trim-specific error types.
+      // A user-initiated cancel isn't a failure — rethrow the TrimError
+      // as-is so handleProcessVideo's catch can special-case it instead of
+      // routing it into the generic error UI. Every other failure is
+      // re-thrown as a plain Error carrying TrimError's already-UI-safe
+      // message, so that catch block doesn't need to know about
+      // trim-specific error types for the non-cancel case.
+      if (error instanceof TrimError && error.reason === 'aborted') {
+        throw error;
+      }
       const message = error instanceof Error ? error.message : 'Failed to trim video.';
       throw new Error(message);
+    } finally {
+      trimAbortControllerRef.current = null;
     }
   };
+
+  const handleCancelTrim = useCallback(() => {
+    trimAbortControllerRef.current?.abort();
+  }, []);
 
   // Step A: Upload the source video to storage and create its DB record.
   const uploadAndCreateVideoRecord = async (file: File): Promise<{ videoRecord: Video; signedUrl: string }> => {
@@ -688,6 +723,14 @@ const VincePage: React.FC = () => {
       await submitVideoForCaptioning(videoRecord, signedUrl, videoTitle || selectedFile.name);
 
     } catch (error) {
+      if (error instanceof TrimError && error.reason === 'aborted') {
+        // User-initiated cancel, not a failure — the file and trim
+        // selection are left untouched so "Process Video" can just be
+        // pressed again to retry from scratch.
+        setProcessingState({ status: 'idle' });
+        showToast('Trim cancelled', 'info');
+        return;
+      }
       console.error('Process video error:', error);
       const errorMessage = formatSubmagicErrorMessage(error);
       setUploadState({ status: 'error', message: errorMessage });
@@ -810,6 +853,20 @@ const VincePage: React.FC = () => {
 
   const canProcess = selectedFile && videoTitle.trim() && !isProcessing;
 
+  // Surfaced here, at file-selection time, rather than only inside
+  // TrimTimeline once opened — reuses assertFileSizeWithinTrimLimit's exact
+  // message so this can never drift from the guard actually enforced
+  // inside the trim module itself.
+  const trimUnavailableReason = (() => {
+    if (!selectedFile) return null;
+    try {
+      assertFileSizeWithinTrimLimit(selectedFile);
+      return null;
+    } catch (error) {
+      return error instanceof Error ? error.message : 'This video is too large to trim in your browser.';
+    }
+  })();
+
   return (
     <div className="max-w-6xl mx-auto">
       {/* Header */}
@@ -838,6 +895,7 @@ const VincePage: React.FC = () => {
               state={processingState}
               onRetry={handleRetry}
               onViewLibrary={handleViewLibrary}
+              onCancelTrim={handleCancelTrim}
             />
           )}
 
@@ -878,6 +936,46 @@ const VincePage: React.FC = () => {
                       disabled={isProcessing}
                       className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
                     />
+                  </div>
+                )}
+
+                {/* Trim (optional) — collapsed by default */}
+                {selectedFile && (
+                  <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-900 dark:text-white">
+                          Trim video
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {trimUnavailableReason
+                            ? trimUnavailableReason
+                            : 'Cut out parts of the video before processing'}
+                        </p>
+                      </div>
+                      {!trimUnavailableReason && (
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={trimPanelOpen}
+                            onChange={(e) => setTrimPanelOpen(e.target.checked)}
+                            disabled={isProcessing}
+                            className="sr-only peer"
+                          />
+                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 dark:peer-focus:ring-primary-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-primary-600 peer-disabled:opacity-50 peer-disabled:cursor-not-allowed" />
+                        </label>
+                      )}
+                    </div>
+
+                    {!trimUnavailableReason && trimPanelOpen && (
+                      <div className="mt-4">
+                        <TrimTimeline
+                          file={selectedFile}
+                          onTrimSegmentsChange={setTrimSegments}
+                          disabled={isProcessing}
+                        />
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -921,55 +1019,6 @@ const VincePage: React.FC = () => {
                   videoFile={selectedFile}
                 />
               </div>
-
-              {/* ============================================================
-                  DEV ONLY — TEMPORARY TEST AFFORDANCE
-                  Not shipped to production (import.meta.env.DEV-gated, and
-                  Vite strips this whole block from prod builds). Exists only
-                  to exercise the full upload -> trim -> captioning handoff
-                  before Step 4's real timeline/cut-marker UI exists. Delete
-                  this block once that UI ships and sets trimSegments itself.
-                  ============================================================ */}
-              {import.meta.env.DEV && (
-                <div className="p-3 rounded-lg border-2 border-dashed border-amber-400 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/20">
-                  <p className="text-xs font-mono font-bold text-amber-800 dark:text-amber-400">
-                    DEV ONLY — temporary trim test panel (not real UI, no ship risk)
-                  </p>
-                  <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
-                    Sets a hardcoded trim before clicking "Process Video" below, to test the real
-                    upload → trim → captioning pipeline end to end. Use a test video at least 15s long.
-                  </p>
-                  <div className="flex flex-wrap items-center gap-2 mt-2">
-                    <button
-                      type="button"
-                      disabled={isProcessing}
-                      onClick={() => setTrimSegments([{ start: 0, end: 5 }])}
-                      className="px-2 py-1 text-xs font-medium rounded border border-amber-400 dark:border-amber-600 text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      Single segment: keep first 5s
-                    </button>
-                    <button
-                      type="button"
-                      disabled={isProcessing}
-                      onClick={() => setTrimSegments([{ start: 0, end: 3 }, { start: 8, end: 11 }])}
-                      className="px-2 py-1 text-xs font-medium rounded border border-amber-400 dark:border-amber-600 text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      Multi-segment (concat): 0-3s + 8-11s
-                    </button>
-                    <button
-                      type="button"
-                      disabled={isProcessing || !trimSegments}
-                      onClick={() => setTrimSegments(null)}
-                      className="px-2 py-1 text-xs font-medium rounded border border-gray-400 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      Clear (process untrimmed)
-                    </button>
-                  </div>
-                  <p className="text-xs font-mono text-amber-700 dark:text-amber-400 mt-2">
-                    active trimSegments: {trimSegments ? JSON.stringify(trimSegments) : 'null (will process untrimmed)'}
-                  </p>
-                </div>
-              )}
 
               {/* Process Button */}
               <button
