@@ -73,14 +73,35 @@ export interface SubmagicProjectResponse {
   updatedAt: string;
 }
 
-/** Transcript with timing data */
-export interface SubmagicTranscript {
+/**
+ * Type of a single transcript entry.
+ * Confirmed via live GET /v1/projects/:id response (Sep 18, 2026) -- 'punctuation'
+ * was not observed directly but is documented alongside 'word'/'silence'.
+ */
+export type SubmagicWordType = 'word' | 'silence' | 'punctuation';
+
+/**
+ * A single transcript entry: a spoken word, a silence gap, or a punctuation mark.
+ * `id` is a stable opaque identifier (short alphanumeric for words, `silence_<uuid>`
+ * for silences) -- this is what a future caption-correction feature would address
+ * an edit by, not index or timestamp.
+ */
+export interface SubmagicWord {
+  id: string;
   text: string;
-  segments: {
-    start: number;  // seconds
-    end: number;
-    text: string;
-  }[];
+  type: SubmagicWordType;
+  startTime: number;  // seconds
+  endTime: number;    // seconds
+}
+
+/**
+ * Transcript with word-level timing data.
+ * Confirmed shape via live GET /v1/projects/:id response (Sep 18, 2026) -- this
+ * replaces an earlier, incorrect assumption of a `{ text, segments }` shape that
+ * was never actually observed from the real API.
+ */
+export interface SubmagicTranscript {
+  words: SubmagicWord[];
 }
 
 /** Local video record (maps to Supabase videos table) */

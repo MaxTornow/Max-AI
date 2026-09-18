@@ -465,10 +465,10 @@ describe('BETTY Service Integration Tests', () => {
           templateName: 'Hormozi 4',
           downloadUrl: 'https://cdn.submagic.co/download/video.mp4',
           transcript: {
-            text: 'Hello, this is a test video transcript.',
-            segments: [
-              { start: 0, end: 2.5, text: 'Hello,' },
-              { start: 2.5, end: 5, text: 'this is a test video transcript.' },
+            words: [
+              { id: 'mpDYWfwM', text: 'Hello', type: 'word', startTime: 0, endTime: 0.44 },
+              { id: 'silence_96d68ed0-test', text: '', type: 'silence', startTime: 0.44, endTime: 2.2 },
+              { id: 'abCDefGh', text: 'world', type: 'word', startTime: 2.2, endTime: 2.6 },
             ],
           },
           createdAt: '2024-01-01T00:00:00Z',
@@ -483,8 +483,10 @@ describe('BETTY Service Integration Tests', () => {
         const result = await getSubmagicProjectStatus('proj-123');
 
         expect(result.transcript).toBeDefined();
-        expect(result.transcript?.text).toBe('Hello, this is a test video transcript.');
-        expect(result.transcript?.segments).toHaveLength(2);
+        expect(result.transcript?.words).toHaveLength(3);
+        expect(result.transcript?.words[0]).toEqual({
+          id: 'mpDYWfwM', text: 'Hello', type: 'word', startTime: 0, endTime: 0.44,
+        });
       });
     });
   });
