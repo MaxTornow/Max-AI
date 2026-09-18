@@ -3,7 +3,7 @@ import { FiX, FiCheck, FiLoader, FiAlertCircle, FiLock } from 'react-icons/fi';
 import type { Video, SubmagicWord } from '@services/vince/types';
 import { isWordInHookWindow } from '@services/vince/captions';
 import { saveCaptionCorrections } from '@services/vince/captionCorrection';
-import { updateVideoRecord } from '@services/vince';
+import { completeVideoProcessing } from '@services/vince';
 
 interface CaptionReviewProps {
   video: Video;
@@ -68,10 +68,22 @@ const CaptionReview: React.FC<CaptionReviewProps> = ({ video, onClose, onSaved, 
       const result = await saveCaptionCorrections(video.submagic_project_id, words, previousVideoUrl);
       const newVideoUrl = result.downloadUrl || result.directUrl || previousVideoUrl || '';
 
-      await updateVideoRecord(video.id, {
-        transcript: { words },
-        submagic_download_url: newVideoUrl,
-      });
+      // Re-run the same download-and-store step the initial processing used
+      // (completeVideoProcessing), not just a DB field update -- the app
+      // serves processed_storage_path (our own cached copy in Storage) over
+      // submagic_download_url whenever both exist, so updating only the URL
+      // text left every download serving the stale pre-correction file. This
+      // was a real bug caught by live testing (Sep 19 2026): Submagic's own
+      // API confirmed the corrected render existed, but downloads from our
+      // Library kept serving the original.
+      await completeVideoProcessing(
+        video.id,
+        video.user_id,
+        video.original_filename,
+        video.original_storage_path,
+        newVideoUrl,
+        { words }
+      );
 
       onSaved();
     } catch (err) {
