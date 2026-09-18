@@ -35,6 +35,7 @@ import type { Video, VinceTemplate, UploadState, ProcessingState, SilencePace } 
 // for every user, not just the ones who open the trim panel. types.ts has
 // zero dependencies, so this stays a cheap, synchronous import.
 import { TrimError, assertFileSizeWithinTrimLimit } from '@services/vince/trim/types';
+import { hasEditableCaptionWords } from '@services/vince/captions';
 
 const POLL_INTERVAL = parseInt(import.meta.env.VITE_SUBMAGIC_POLL_INTERVAL_MS || '30000');
 const VINCE_SETTINGS_KEY = 'vince_editor_settings';
@@ -178,7 +179,13 @@ const VincePage: React.FC = () => {
   // Library state
   const [downloadingVideoId, setDownloadingVideoId] = useState<string | null>(null);
   const [deletingVideoId, setDeletingVideoId] = useState<string | null>(null);
-  const [captionReviewVideo, setCaptionReviewVideo] = useState<Video | null>(null);
+  // 'gate' = mandatory checkpoint for a video that just finished processing in
+  // this session -- closing it finalizes to 'completed' rather than just
+  // dismissing. 'library' = optional, anytime review from the Library tab --
+  // closing it just dismisses, since the video is already finalized either way.
+  const [captionReview, setCaptionReview] = useState<
+    { mode: 'gate' | 'library'; video: Video } | null
+  >(null);
 
   // Save settings to localStorage whenever they change
   useEffect(() => {
@@ -466,14 +473,25 @@ const VincePage: React.FC = () => {
 
         try {
           // Save processed video, update DB, and clean up original
-          await completeVideoProcessing(
+          const updatedVideo = await completeVideoProcessing(
             currentVideoId, user!.id,
             selectedFile?.name || 'video.mp4',
             uploadState.status === 'uploaded' ? uploadState.storagePath : '',
             videoUrl, projectStatus.transcript
           );
 
-          setProcessingState({ status: 'completed', videoId: currentVideoId });
+          // Mandatory checkpoint for a video that just finished processing in
+          // this session: if there's a transcript worth reviewing, hold off
+          // marking 'completed' until the user has passed through caption
+          // review (save or explicit skip) -- see finishCaptionReview.
+          // Existing library videos never hit this path again, so this only
+          // affects videos completing from here forward, not retroactively.
+          if (hasEditableCaptionWords(updatedVideo.transcript?.words ?? [])) {
+            setProcessingState({ status: 'awaiting_caption_review', videoId: currentVideoId });
+            setCaptionReview({ mode: 'gate', video: updatedVideo });
+          } else {
+            setProcessingState({ status: 'completed', videoId: currentVideoId });
+          }
           showToast('Video processing complete!', 'success');
           refetchVideos();
 
@@ -811,12 +829,25 @@ const VincePage: React.FC = () => {
   };
 
   const handleReviewCaptions = (video: Video) => {
-    setCaptionReviewVideo(video);
+    setCaptionReview({ mode: 'library', video });
+  };
+
+  // Closing/saving a 'gate' review finalizes the video (setting 'completed'
+  // only now, not before) -- that's what makes review mandatory for a video
+  // that just finished processing: nothing else transitions processingState
+  // to 'completed' for it. A 'library' review has nothing to finalize --
+  // the video was already completed when this was opened.
+  const finishCaptionReview = () => {
+    if (captionReview?.mode === 'gate') {
+      setProcessingState({ status: 'completed', videoId: captionReview.video.id });
+    }
+    setCaptionReview(null);
   };
 
   const handleCaptionsSaved = () => {
     showToast('Captions updated', 'success');
     refetchVideos();
+    finishCaptionReview();
   };
 
   // View library after processing
@@ -912,7 +943,7 @@ const VincePage: React.FC = () => {
           )}
 
           {/* Only show form if not completed */}
-          {processingState.status !== 'completed' && (
+          {processingState.status !== 'completed' && processingState.status !== 'awaiting_caption_review' && (
             <>
               {/* Video Upload */}
               <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm border border-gray-200 dark:border-gray-700">
@@ -1082,11 +1113,14 @@ const VincePage: React.FC = () => {
         />
       )}
 
-      {/* Caption review overlay, available for any completed video with an editable transcript */}
-      {captionReviewVideo && (
+      {/* Caption review overlay -- 'gate' mode for a video that just finished
+          processing (mandatory checkpoint), 'library' mode for revisiting
+          any already-completed video's captions any time (optional) */}
+      {captionReview && (
         <CaptionReview
-          video={captionReviewVideo}
-          onClose={() => setCaptionReviewVideo(null)}
+          video={captionReview.video}
+          mode={captionReview.mode}
+          onClose={finishCaptionReview}
           onSaved={handleCaptionsSaved}
         />
       )}

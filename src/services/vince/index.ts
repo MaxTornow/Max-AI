@@ -234,20 +234,18 @@ export const completeVideoProcessing = async (
   originalStoragePath: string,
   downloadUrl: string,
   transcript?: SubmagicTranscript
-): Promise<string> => {
+): Promise<Video> => {
   // 1. Download from Submagic and save to Supabase Storage
   const processedPath = await saveProcessedVideo(downloadUrl, userId, originalFilename);
 
   // 2. Update database record
-  await updateVideoRecord(videoId, {
+  return updateVideoRecord(videoId, {
     submagic_status: 'completed',
     processed_storage_path: processedPath,
     submagic_download_url: downloadUrl,
     processing_completed_at: new Date().toISOString(),
     transcript: transcript ?? null,
   });
-
-  return processedPath;
 };
 
 /**

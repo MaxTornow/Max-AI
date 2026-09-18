@@ -180,6 +180,7 @@ export type ProcessingState =
   | { status: 'creating'; message: string }
   | { status: 'processing'; projectId: string; progress: number }
   | { status: 'downloading'; message: string }
+  | { status: 'awaiting_caption_review'; videoId: string }
   | { status: 'completed'; videoId: string }
   | { status: 'error'; message: string; retryable: boolean };
 

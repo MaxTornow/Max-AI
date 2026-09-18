@@ -54,6 +54,13 @@ const ProcessingProgress: React.FC<ProcessingProgressProps> = ({
           message: state.message,
           color: 'green',
         };
+      case 'awaiting_caption_review':
+        return {
+          icon: <FiCheck className="w-6 h-6 text-green-500" />,
+          title: 'Processing complete',
+          message: 'Review the captions below before finishing up.',
+          color: 'green',
+        };
       case 'completed':
         return {
           icon: <FiCheck className="w-6 h-6 text-green-500" />,

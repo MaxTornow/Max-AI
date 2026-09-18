@@ -8,8 +8,19 @@ import { updateVideoRecord } from '@services/vince';
 interface CaptionReviewProps {
   video: Video;
   onClose: () => void;
-  /** Called after a successful save so the caller can refresh its video list. */
+  /**
+   * Called after a successful save. The caller is expected to both refresh
+   * its video list and close/finalize this panel -- this component does not
+   * call onClose itself after a successful save.
+   */
   onSaved: () => void;
+  /**
+   * 'gate': a video that just finished processing -- this is a mandatory
+   * checkpoint before it's finalized, so closing without saving still finishes
+   * (a user isn't forced to edit anything, just to pass through the screen).
+   * 'library': optional, anytime revisit of an already-finalized video.
+   */
+  mode?: 'gate' | 'library';
 }
 
 /**
@@ -17,7 +28,7 @@ interface CaptionReviewProps {
  * Submagic's transcript, text-only (timing is never touched), then saves
  * the correction and waits for the re-rendered video.
  */
-const CaptionReview: React.FC<CaptionReviewProps> = ({ video, onClose, onSaved }) => {
+const CaptionReview: React.FC<CaptionReviewProps> = ({ video, onClose, onSaved, mode = 'library' }) => {
   const originalWords = video.transcript?.words ?? [];
   const [words, setWords] = useState<SubmagicWord[]>(originalWords);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -63,7 +74,6 @@ const CaptionReview: React.FC<CaptionReviewProps> = ({ video, onClose, onSaved }
       });
 
       onSaved();
-      onClose();
     } catch (err) {
       setError(
         err instanceof Error
@@ -79,7 +89,14 @@ const CaptionReview: React.FC<CaptionReviewProps> = ({ video, onClose, onSaved }
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] flex flex-col">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Review Captions</h2>
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Review Captions</h2>
+            {mode === 'gate' && (
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                Your video is processed. Check for any misspelled words before finishing up.
+              </p>
+            )}
+          </div>
           <button
             onClick={onClose}
             disabled={saving}
@@ -174,7 +191,9 @@ const CaptionReview: React.FC<CaptionReviewProps> = ({ video, onClose, onSaved }
             disabled={saving}
             className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50"
           >
-            {hasChanges ? 'Discard' : 'Close'}
+            {mode === 'gate'
+              ? hasChanges ? 'Discard & Finish' : 'Looks Good, Finish'
+              : hasChanges ? 'Discard' : 'Close'}
           </button>
           <button
             onClick={handleSave}
