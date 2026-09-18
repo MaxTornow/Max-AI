@@ -68,6 +68,12 @@ export interface SubmagicProjectResponse {
   downloadUrl?: string;  // Present when status = "completed" (expires in hours)
   directUrl?: string;    // Alternative download URL (CloudFront direct link)
   transcript?: SubmagicTranscript;
+  /**
+   * Separate from `status` -- confirmed real field (Sep 18, 2026): transcript edits
+   * (PUT .../words) are rejected with VALIDATION_ERROR unless this is "COMPLETED".
+   * Typed as `string` rather than an enum since only that one value is confirmed.
+   */
+  transcriptionStatus?: string;
   errorMessage?: string;  // Present when status = "failed"
   createdAt: string;
   updatedAt: string;
@@ -198,6 +204,22 @@ export const CAPTION_POSITION_Y_DEFAULT = 40;
 
 /** Maximum title length for Submagic API (prevents "title is too long" error) */
 export const MAX_TITLE_LENGTH = 100;
+
+/**
+ * PROVISIONAL: duration (seconds) of the animated hook-title overlay window,
+ * used to hide/disable caption correction for words that fall inside it --
+ * that window renders an AI-paraphrased sentence, not literal on-screen
+ * captions driven by the transcript, so editing a word's text there succeeds
+ * via the API but is invisible in the rendered video.
+ *
+ * Submagic's API exposes no field marking the hook's actual boundary. This
+ * is a fixed estimate (one observed case measured ~2.7s; rounded up for
+ * margin) confirmed live only once (Sep 18, 2026, "Hormozi 2" template).
+ * Revisit once Submagic support confirms the real rule or more real videos
+ * (different templates/hook lengths) are checked -- same "provisional cap,
+ * confirm via more real-world data" pattern as MAX_TRIM_FILE_SIZE_BYTES.
+ */
+export const HOOK_OVERLAY_DURATION_SECONDS = 3;
 
 /** Supported language options */
 export const SUPPORTED_LANGUAGES = [

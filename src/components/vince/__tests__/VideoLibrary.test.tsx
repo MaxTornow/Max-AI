@@ -18,6 +18,7 @@ describe('VideoLibrary Component', () => {
   const mockOnDownload = jest.fn();
   const mockOnReprocess = jest.fn();
   const mockOnDelete = jest.fn();
+  const mockOnReviewCaptions = jest.fn();
   const mockOnRefresh = jest.fn();
 
   const createMockVideo = (overrides: Partial<Video> = {}): Video => ({
@@ -60,6 +61,7 @@ describe('VideoLibrary Component', () => {
     onDownload: mockOnDownload,
     onReprocess: mockOnReprocess,
     onDelete: mockOnDelete,
+    onReviewCaptions: mockOnReviewCaptions,
     onRefresh: mockOnRefresh,
     downloadingVideoId: null,
     deletingVideoId: null,

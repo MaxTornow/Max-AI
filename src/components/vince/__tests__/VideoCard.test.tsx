@@ -18,6 +18,7 @@ describe('VideoCard Component', () => {
   const mockOnDownload = jest.fn();
   const mockOnReprocess = jest.fn();
   const mockOnDelete = jest.fn();
+  const mockOnReviewCaptions = jest.fn();
 
   const createMockVideo = (overrides: Partial<Video> = {}): Video => ({
     id: 'video-123',
@@ -66,6 +67,7 @@ describe('VideoCard Component', () => {
         onDownload={mockOnDownload}
         onReprocess={mockOnReprocess}
         onDelete={mockOnDelete}
+        onReviewCaptions={mockOnReviewCaptions}
       />
     );
 
@@ -82,6 +84,7 @@ describe('VideoCard Component', () => {
         onDownload={mockOnDownload}
         onReprocess={mockOnReprocess}
         onDelete={mockOnDelete}
+        onReviewCaptions={mockOnReviewCaptions}
       />
     );
 
@@ -97,6 +100,7 @@ describe('VideoCard Component', () => {
         onDownload={mockOnDownload}
         onReprocess={mockOnReprocess}
         onDelete={mockOnDelete}
+        onReviewCaptions={mockOnReviewCaptions}
       />
     );
 
@@ -112,6 +116,7 @@ describe('VideoCard Component', () => {
         onDownload={mockOnDownload}
         onReprocess={mockOnReprocess}
         onDelete={mockOnDelete}
+        onReviewCaptions={mockOnReviewCaptions}
       />
     );
 
@@ -127,6 +132,7 @@ describe('VideoCard Component', () => {
         onDownload={mockOnDownload}
         onReprocess={mockOnReprocess}
         onDelete={mockOnDelete}
+        onReviewCaptions={mockOnReviewCaptions}
       />
     );
 
@@ -142,6 +148,7 @@ describe('VideoCard Component', () => {
         onDownload={mockOnDownload}
         onReprocess={mockOnReprocess}
         onDelete={mockOnDelete}
+        onReviewCaptions={mockOnReviewCaptions}
       />
     );
 
@@ -160,6 +167,7 @@ describe('VideoCard Component', () => {
         onDownload={mockOnDownload}
         onReprocess={mockOnReprocess}
         onDelete={mockOnDelete}
+        onReviewCaptions={mockOnReviewCaptions}
       />
     );
 
@@ -176,6 +184,7 @@ describe('VideoCard Component', () => {
         onDownload={mockOnDownload}
         onReprocess={mockOnReprocess}
         onDelete={mockOnDelete}
+        onReviewCaptions={mockOnReviewCaptions}
       />
     );
 
@@ -191,6 +200,7 @@ describe('VideoCard Component', () => {
         onDownload={mockOnDownload}
         onReprocess={mockOnReprocess}
         onDelete={mockOnDelete}
+        onReviewCaptions={mockOnReviewCaptions}
       />
     );
 
@@ -207,6 +217,7 @@ describe('VideoCard Component', () => {
         onDownload={mockOnDownload}
         onReprocess={mockOnReprocess}
         onDelete={mockOnDelete}
+        onReviewCaptions={mockOnReviewCaptions}
         isDownloading={true}
       />
     );
@@ -223,6 +234,7 @@ describe('VideoCard Component', () => {
         onDownload={mockOnDownload}
         onReprocess={mockOnReprocess}
         onDelete={mockOnDelete}
+        onReviewCaptions={mockOnReviewCaptions}
       />
     );
 
@@ -238,6 +250,7 @@ describe('VideoCard Component', () => {
         onDownload={mockOnDownload}
         onReprocess={mockOnReprocess}
         onDelete={mockOnDelete}
+        onReviewCaptions={mockOnReviewCaptions}
       />
     );
 
@@ -253,6 +266,7 @@ describe('VideoCard Component', () => {
         onDownload={mockOnDownload}
         onReprocess={mockOnReprocess}
         onDelete={mockOnDelete}
+        onReviewCaptions={mockOnReviewCaptions}
       />
     );
 
@@ -269,6 +283,7 @@ describe('VideoCard Component', () => {
         onDownload={mockOnDownload}
         onReprocess={mockOnReprocess}
         onDelete={mockOnDelete}
+        onReviewCaptions={mockOnReviewCaptions}
       />
     );
 
@@ -287,6 +302,7 @@ describe('VideoCard Component', () => {
         onDownload={mockOnDownload}
         onReprocess={mockOnReprocess}
         onDelete={mockOnDelete}
+        onReviewCaptions={mockOnReviewCaptions}
       />
     );
 
@@ -305,6 +321,7 @@ describe('VideoCard Component', () => {
         onDownload={mockOnDownload}
         onReprocess={mockOnReprocess}
         onDelete={mockOnDelete}
+        onReviewCaptions={mockOnReviewCaptions}
       />
     );
 
@@ -323,6 +340,7 @@ describe('VideoCard Component', () => {
         onDownload={mockOnDownload}
         onReprocess={mockOnReprocess}
         onDelete={mockOnDelete}
+        onReviewCaptions={mockOnReviewCaptions}
         isDeleting={true}
       />
     );
@@ -340,6 +358,7 @@ describe('VideoCard Component', () => {
         onDownload={mockOnDownload}
         onReprocess={mockOnReprocess}
         onDelete={mockOnDelete}
+        onReviewCaptions={mockOnReviewCaptions}
       />
     );
 
@@ -355,6 +374,7 @@ describe('VideoCard Component', () => {
         onDownload={mockOnDownload}
         onReprocess={mockOnReprocess}
         onDelete={mockOnDelete}
+        onReviewCaptions={mockOnReviewCaptions}
       />
     );
 

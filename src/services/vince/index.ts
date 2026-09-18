@@ -14,8 +14,8 @@ import type {
 import { MAX_TITLE_LENGTH } from './types';
 import { retryableFetch } from './retry';
 
-const SUBMAGIC_API_URL = import.meta.env.VITE_SUBMAGIC_API_URL || 'https://api.submagic.co/v1';
-const SUBMAGIC_API_KEY = import.meta.env.VITE_SUBMAGIC_API_KEY;
+export const SUBMAGIC_API_URL = import.meta.env.VITE_SUBMAGIC_API_URL || 'https://api.submagic.co/v1';
+export const SUBMAGIC_API_KEY = import.meta.env.VITE_SUBMAGIC_API_KEY;
 
 // ===== Submagic API Functions =====
 

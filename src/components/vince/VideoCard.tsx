@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
-import { FiDownload, FiRefreshCw, FiTrash2, FiClock, FiAlertCircle, FiCheck, FiLoader } from 'react-icons/fi';
+import { FiDownload, FiRefreshCw, FiTrash2, FiClock, FiAlertCircle, FiCheck, FiLoader, FiEdit3 } from 'react-icons/fi';
 import { format } from 'date-fns';
 import type { Video, SubmagicStatus } from '@services/vince/types';
 import { getTemplateBySubmagicName } from '@services/vince/templates';
+import { hasEditableCaptionWords } from '@services/vince/captions';
 
 interface VideoCardProps {
   video: Video;
   onDownload: (video: Video) => void;
   onReprocess: (video: Video) => void;
   onDelete: (video: Video) => void;
+  onReviewCaptions: (video: Video) => void;
   isDownloading?: boolean;
   isDeleting?: boolean;
 }
@@ -71,6 +73,7 @@ const VideoCard: React.FC<VideoCardProps> = ({
   onDownload,
   onReprocess,
   onDelete,
+  onReviewCaptions,
   isDownloading = false,
   isDeleting = false,
 }) => {
@@ -78,6 +81,8 @@ const VideoCard: React.FC<VideoCardProps> = ({
 
   const statusInfo = getStatusInfo(video.submagic_status);
   const template = getTemplateBySubmagicName(video.template_name);
+  const canReviewCaptions =
+    video.submagic_status === 'completed' && hasEditableCaptionWords(video.transcript?.words ?? []);
 
   const handleDelete = () => {
     onDelete(video);
@@ -146,6 +151,16 @@ const VideoCard: React.FC<VideoCardProps> = ({
             >
               <FiRefreshCw className="w-3 h-3" />
               Re-process
+            </button>
+          )}
+
+          {canReviewCaptions && (
+            <button
+              onClick={() => onReviewCaptions(video)}
+              className="inline-flex items-center justify-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
+            >
+              <FiEdit3 className="w-3 h-3" />
+              Captions
             </button>
           )}
 

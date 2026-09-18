@@ -13,6 +13,7 @@ import FeatureToggles from '@components/vince/FeatureToggles';
 import TrimTimeline from '@components/vince/TrimTimeline';
 import ProcessingProgress from '@components/vince/ProcessingProgress';
 import VideoLibrary from '@components/vince/VideoLibrary';
+import CaptionReview from '@components/vince/CaptionReview';
 
 import {
   uploadVideoToStorage,
@@ -177,6 +178,7 @@ const VincePage: React.FC = () => {
   // Library state
   const [downloadingVideoId, setDownloadingVideoId] = useState<string | null>(null);
   const [deletingVideoId, setDeletingVideoId] = useState<string | null>(null);
+  const [captionReviewVideo, setCaptionReviewVideo] = useState<Video | null>(null);
 
   // Save settings to localStorage whenever they change
   useEffect(() => {
@@ -808,6 +810,15 @@ const VincePage: React.FC = () => {
     }
   };
 
+  const handleReviewCaptions = (video: Video) => {
+    setCaptionReviewVideo(video);
+  };
+
+  const handleCaptionsSaved = () => {
+    showToast('Captions updated', 'success');
+    refetchVideos();
+  };
+
   // View library after processing
   const handleViewLibrary = () => {
     setActiveTab('library');
@@ -1064,9 +1075,19 @@ const VincePage: React.FC = () => {
           onDownload={handleDownload}
           onReprocess={handleReprocess}
           onDelete={handleDelete}
+          onReviewCaptions={handleReviewCaptions}
           onRefresh={refetchVideos}
           downloadingVideoId={downloadingVideoId}
           deletingVideoId={deletingVideoId}
+        />
+      )}
+
+      {/* Caption review overlay, available for any completed video with an editable transcript */}
+      {captionReviewVideo && (
+        <CaptionReview
+          video={captionReviewVideo}
+          onClose={() => setCaptionReviewVideo(null)}
+          onSaved={handleCaptionsSaved}
         />
       )}
     </div>

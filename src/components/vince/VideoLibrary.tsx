@@ -9,6 +9,7 @@ interface VideoLibraryProps {
   onDownload: (video: Video) => void;
   onReprocess: (video: Video) => void;
   onDelete: (video: Video) => void;
+  onReviewCaptions: (video: Video) => void;
   onRefresh: () => void;
   downloadingVideoId?: string | null;
   deletingVideoId?: string | null;
@@ -23,6 +24,7 @@ const VideoLibrary: React.FC<VideoLibraryProps> = ({
   onDownload,
   onReprocess,
   onDelete,
+  onReviewCaptions,
   onRefresh,
   downloadingVideoId,
   deletingVideoId,
@@ -79,6 +81,7 @@ const VideoLibrary: React.FC<VideoLibraryProps> = ({
             onDownload={onDownload}
             onReprocess={onReprocess}
             onDelete={onDelete}
+            onReviewCaptions={onReviewCaptions}
             isDownloading={downloadingVideoId === video.id}
             isDeleting={deletingVideoId === video.id}
           />
