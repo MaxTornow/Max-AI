@@ -213,12 +213,27 @@ export const MAX_TITLE_LENGTH = 100;
  * captions driven by the transcript, so editing a word's text there succeeds
  * via the API but is invisible in the rendered video.
  *
- * Submagic's API exposes no field marking the hook's actual boundary. This
- * is a fixed estimate (one observed case measured ~2.7s; rounded up for
- * margin) confirmed live only once (Sep 18, 2026, "Hormozi 2" template).
- * Revisit once Submagic support confirms the real rule or more real videos
- * (different templates/hook lengths) are checked -- same "provisional cap,
- * confirm via more real-world data" pattern as MAX_TRIM_FILE_SIZE_BYTES.
+ * Submagic's API exposes no field marking the hook's actual boundary --
+ * confirmed directly (Sep 18, 2026): a fresh project's full field list has
+ * no templateName, no hook metadata, nothing timing-related beyond `words`.
+ * This constant is a fixed estimate, not a computed/detected value.
+ *
+ * Real data so far, all on "Hormozi 4" unless noted:
+ * - ~2.7s (one observed case, "Hormozi 2" template, Sep 18 2026)
+ * - ~2.13s (controlled test, 4-char hook text "HOPE", Sep 19 2026)
+ * - ~2.3s (controlled test, 56-char hook sentence, same video/template, Sep 19 2026)
+ * The 4-vs-56-char test (~0.17s difference, same video, same template) rules
+ * OUT hook-text length as a driver of duration -- it is NOT proportional to
+ * the hook sentence's length. 3s keeps a small margin over the ~2.3s high end
+ * observed so far.
+ *
+ * Still open, not yet tested:
+ * - Whether duration varies BY TEMPLATE (only Hormozi 2/4 have controlled
+ *   data; a same-sentence/different-template comparison was started but
+ *   blocked by unrelated old-project storage failures before completion).
+ * - Whether Submagic support can confirm a real, non-heuristic rule.
+ * Revisit if either surfaces a case outside this range. Same "provisional
+ * cap, confirm via more real-world data" pattern as MAX_TRIM_FILE_SIZE_BYTES.
  */
 export const HOOK_OVERLAY_DURATION_SECONDS = 3;
 
