@@ -67,7 +67,15 @@ export interface SubmagicProjectResponse {
   templateName: string;
   downloadUrl?: string;  // Present when status = "completed" (expires in hours)
   directUrl?: string;    // Alternative download URL (CloudFront direct link)
-  transcript?: SubmagicTranscript;
+  /**
+   * Confirmed real field (Sep 18, 2026): a flat, top-level array -- NOT nested
+   * under a `transcript` key. A full live field list from GET /v1/projects/:id
+   * has no `transcript` property at all. `SubmagicTranscript` (the { words }
+   * wrapper) is OUR OWN storage shape for `videos.transcript`, not something
+   * Submagic's response actually has -- construct it explicitly at call sites
+   * (`words ? { words } : undefined`), don't read `.transcript` off this type.
+   */
+  words?: SubmagicWord[];
   /**
    * Separate from `status` -- confirmed real field (Sep 18, 2026): transcript edits
    * (PUT .../words) are rejected with VALIDATION_ERROR unless this is "COMPLETED".

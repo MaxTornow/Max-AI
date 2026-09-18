@@ -309,7 +309,8 @@ const VincePage: React.FC = () => {
                 console.log('Timed-out video', video.id, 'actually completed on Submagic, saving...');
                 await completeVideoProcessing(
                   video.id, user!.id, video.original_filename,
-                  video.original_storage_path, videoUrl, status.transcript
+                  video.original_storage_path, videoUrl,
+                  status.words ? { words: status.words } : undefined
                 );
                 needsRefetch = true;
                 continue;
@@ -336,7 +337,8 @@ const VincePage: React.FC = () => {
           console.log('Video', video.id, 'completed, updating database with URL:', videoUrl);
           await completeVideoProcessing(
             video.id, user!.id, video.original_filename,
-            video.original_storage_path, videoUrl, status.transcript
+            video.original_storage_path, videoUrl,
+            status.words ? { words: status.words } : undefined
           );
           needsRefetch = true;
         } else if (status.status === 'failed') {
@@ -477,7 +479,8 @@ const VincePage: React.FC = () => {
             currentVideoId, user!.id,
             selectedFile?.name || 'video.mp4',
             uploadState.status === 'uploaded' ? uploadState.storagePath : '',
-            videoUrl, projectStatus.transcript
+            videoUrl,
+            projectStatus.words ? { words: projectStatus.words } : undefined
           );
 
           // Mandatory checkpoint for a video that just finished processing in

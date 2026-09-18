@@ -456,7 +456,14 @@ describe('BETTY Service Integration Tests', () => {
         );
       });
 
-      test('should include transcript when available', async () => {
+      // Real GET /v1/projects/:id response (confirmed live, Sep 18-19 2026):
+      // `words` is a flat, TOP-LEVEL field -- there is no `transcript` wrapper
+      // key at all. An earlier version of this mock nested `words` under a
+      // fictional `transcript` property, which matched the (wrong) type at
+      // the time but not the real API -- masking a real bug where
+      // status.transcript was always undefined at every call site. Keep this
+      // mock flat to match the real response, not whatever the type claims.
+      test('should include words when available', async () => {
         const mockResponse = {
           id: 'proj-123',
           status: 'completed',
@@ -464,13 +471,11 @@ describe('BETTY Service Integration Tests', () => {
           language: 'en',
           templateName: 'Hormozi 4',
           downloadUrl: 'https://cdn.submagic.co/download/video.mp4',
-          transcript: {
-            words: [
-              { id: 'mpDYWfwM', text: 'Hello', type: 'word', startTime: 0, endTime: 0.44 },
-              { id: 'silence_96d68ed0-test', text: '', type: 'silence', startTime: 0.44, endTime: 2.2 },
-              { id: 'abCDefGh', text: 'world', type: 'word', startTime: 2.2, endTime: 2.6 },
-            ],
-          },
+          words: [
+            { id: 'mpDYWfwM', text: 'Hello', type: 'word', startTime: 0, endTime: 0.44 },
+            { id: 'silence_96d68ed0-test', text: '', type: 'silence', startTime: 0.44, endTime: 2.2 },
+            { id: 'abCDefGh', text: 'world', type: 'word', startTime: 2.2, endTime: 2.6 },
+          ],
           createdAt: '2024-01-01T00:00:00Z',
           updatedAt: '2024-01-01T01:00:00Z',
         };
@@ -482,9 +487,9 @@ describe('BETTY Service Integration Tests', () => {
 
         const result = await getSubmagicProjectStatus('proj-123');
 
-        expect(result.transcript).toBeDefined();
-        expect(result.transcript?.words).toHaveLength(3);
-        expect(result.transcript?.words[0]).toEqual({
+        expect(result.words).toBeDefined();
+        expect(result.words).toHaveLength(3);
+        expect(result.words?.[0]).toEqual({
           id: 'mpDYWfwM', text: 'Hello', type: 'word', startTime: 0, endTime: 0.44,
         });
       });
