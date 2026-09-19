@@ -28,10 +28,6 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       port: 3000,
-      headers: {
-        'Cross-Origin-Opener-Policy': 'same-origin',
-        'Cross-Origin-Embedder-Policy': 'require-corp'
-      },
       proxy: {
         '/api/video-download': {
           target: 'https://scontent.cdninstagram.com', // Default Instagram CDN

@@ -459,20 +459,24 @@ const TrimTimeline: React.FC<TrimTimelineProps> = ({ file, onTrimSegmentsChange,
     );
     const newCut: Cut = { id: `cut-${nextIdRef.current++}`, start, end: start + cutLength };
 
-    setCuts((prev) => {
-      const next = [...prev, newCut].sort((a, b) => a.start - b.start);
-      emitSegments(next, duration);
-      return next;
-    });
+    // Compute next state and set it directly, rather than inside a setCuts()
+    // functional updater -- React can invoke that updater during the render
+    // phase, and emitSegments() ultimately calls the parent's
+    // onTrimSegmentsChange (VinceEditorContext's setter), so calling it from
+    // inside the updater triggered "Cannot update a component
+    // (VinceEditorProvider) while rendering a different component
+    // (TrimTimeline)". Calling it here, after setCuts, keeps it in this
+    // click handler's own execution, not React's render phase.
+    const next = [...cuts, newCut].sort((a, b) => a.start - b.start);
+    setCuts(next);
+    emitSegments(next, duration);
   };
 
   const handleRemoveCut = (id: string) => {
     pauseEditPreview();
-    setCuts((prev) => {
-      const next = prev.filter((c) => c.id !== id);
-      if (duration != null) emitSegments(next, duration);
-      return next;
-    });
+    const next = cuts.filter((c) => c.id !== id);
+    setCuts(next);
+    if (duration != null) emitSegments(next, duration);
   };
 
   const handlePointerDown = (cutId: string, handle: 'start' | 'end' | 'move') => (e: React.PointerEvent) => {
